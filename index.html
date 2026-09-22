@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Biblioteca Virtual de Estudio — Normativas de la Fiscalía General del Estado Plurinacional de Bolivia. Estudia leyes y genera quizzes automáticos.">
+    <meta name="theme-color" content="#070b14">
+
+    <title>Biblioluch — Biblioteca Jurídica Bolivia</title>
+
+    <!-- Favicon emoji -->
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
+
+    <!-- Fuentes Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <!-- PDF.js desde CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+</head>
+
+<body>
+
+    <div class="app-layout">
+
+        <!-- ════════════════ SIDEBAR ════════════════ -->
+        <aside class="sidebar" id="sidebar">
+
+            <div class="sidebar__brand">
+                <div class="sidebar__logo-wrap" aria-hidden="true">⚖️</div>
+                <div class="sidebar__brand-text">
+                    <span class="sidebar__app-name">Biblioluch</span>
+                    <span class="sidebar__app-sub">Fiscalía · Bolivia</span>
+                </div>
+            </div>
+
+            <nav class="sidebar__nav" role="navigation" aria-label="Navegación principal">
+                <div class="sidebar__section-label">Mi Espacio</div>
+                <a href="#" class="sidebar__link" onclick="App.navegarA('favoritos')" role="button"
+                    data-nav="favoritos">
+                    <span style="font-size:14px">⭐</span>
+                    Mis Favoritos
+                </a>
+                <a href="#" class="sidebar__link" onclick="App.navegarA('estadisticas')" role="button"
+                    data-nav="estadisticas">
+                    <span style="font-size:14px">📊</span>
+                    Estadísticas
+                </a>
+
+                <div class="sidebar__section-label" style="margin-top: 10px;">Biblioteca</div>
+                <a href="#" class="sidebar__link active" onclick="App.navegarA('biblioteca')" role="button"
+                    data-nav="biblioteca" id="nav-biblioteca">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"
+                        aria-hidden="true">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                    Biblioteca
+                </a>
+
+                <a href="#" class="sidebar__link" data-nav="quiz-config" id="nav-quiz" role="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"
+                        aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <path d="M12 17h.01" />
+                    </svg>
+                    Generar Quiz
+                </a>
+
+                <span class="sidebar__section-label" style="margin-top:12px;">Leyes</span>
+
+                <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'cpe'})" role="button">
+                    <span style="font-size:14px">🏛️</span>
+                    Const. Política
+                </a>
+                <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'cpp'})" role="button">
+                    <span style="font-size:14px">⚖️</span>
+                    Cód. Proc. Penal
+                </a>
+                <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'cp'})" role="button">
+                    <span style="font-size:14px">🔒</span>
+                    Código Penal
+                </a>
+                <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'lomp'})" role="button">
+                    <span style="font-size:14px">🏢</span>
+                    Ley Org. Min. Pub.
+                </a>
+            </nav>
+
+            <div class="sidebar__footer">
+                <span class="sidebar__footer-logo">⚖️ Fiscalía General</span>
+                <p class="sidebar__footer-text">Estado Plurinacional de Bolivia</p>
+                <button class="btn-clear-cache" id="btn-toggle-theme" title="Cambiar a Modo Claro / Oscuro"
+                    style="margin-top: 8px;">
+                    ☀️ Cambiar Tema
+                </button>
+                <button class="btn-clear-cache" id="btn-clear-cache"
+                    title="Borra el caché para re-analizar todos los PDFs" style="margin-top: 8px;">
+                    🗑️ Limpiar caché PDFs
+                </button>
+            </div>
+        </aside>
+
+        <!-- ════════════════ CONTENIDO PRINCIPAL ════════════════ -->
+        <!-- ════════════════ CONTENIDO PRINCIPAL ════════════════ -->
+        <button id="btn-toggle-sidebar" class="fab-menu" aria-label="Abrir menú">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none">
+                <path d="M3 12h18M3 6h18M3 18h18" />
+            </svg>
+        </button>
+        <main class="main" id="main-content" role="main">
+            <!-- El contenido se inyecta dinámicamente por app.js -->
+            <div style="display:flex;align-items:center;justify-content:center;min-height:60vh;gap:12px;color:#475569">
+                <div
+                    style="width:32px;height:32px;border:3px solid #1a2a42;border-top-color:#f0a500;border-radius:50%;animation:spin 0.8s linear infinite">
+                </div>
+                <span style="font-size:15px">Cargando biblioteca...</span>
+            </div>
+        </main>
+
+    </div><!-- /app-layout -->
+
+    <!-- ════════════════ LOADING OVERLAY ════════════════ -->
+    <div class="loading-overlay" id="loading-overlay" role="dialog" aria-label="Cargando" aria-live="polite">
+        <div class="loading-card">
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <div class="loading-text" id="loading-text">Procesando PDF...</div>
+            <div class="loading-bar">
+                <div class="loading-bar__fill" id="loading-bar-fill"></div>
+            </div>
+            <div class="loading-percent" id="loading-percent">0%</div>
+        </div>
+    </div>
+
+    <!-- ════════════════ SCRIPTS ════════════════ -->
+    <!-- Módulos de la app (orden de dependencia) -->
+    <script src="js/data.js"></script>
+    <script src="js/pdf-parser.js"></script>
+    <script src="js/quiz-engine.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+
+</html>
