@@ -17,6 +17,8 @@ const App = {
         respondidaActual: false,
         cargando: false,
         librosPDF: [],
+        librosComunidad: [],
+        grupoComunidad: null,
         usuario: null,
         vistaDespuesDeAuth: 'libros-pdf',
         favoritos: JSON.parse(localStorage.getItem('bibliolex_favs') || '{}'),
@@ -92,6 +94,7 @@ const App = {
                 if (destino === 'biblioteca') this.navegarA('biblioteca');
                 if (destino === 'quiz-config') this.navegarA('quiz-config');
                 if (destino === 'libros-pdf') this.navegarA('libros-pdf');
+                if (destino === 'comunidad') this.navegarA('comunidad');
             });
         });
 
@@ -162,6 +165,7 @@ const App = {
         switch (vista) {
             case 'biblioteca':    this._renderBiblioteca(); break;
             case 'libros-pdf':    this._renderLibrosPDF(); break;
+            case 'comunidad':    this._renderComunidad(params.groupId); break;
             case 'auth':          this._renderAutenticacion(); break;
             case 'lector':        this._renderLector(params.leyId); break;
             case 'quiz-config':   this._renderQuizConfig(params.leyId); break;
@@ -287,6 +291,8 @@ const App = {
         }
         this.estado.usuario = null;
         this.estado.librosPDF = [];
+        this.estado.librosComunidad = [];
+        this.estado.grupoComunidad = null;
         this._actualizarCuentaSupabase();
         this.navegarA('biblioteca');
     },
@@ -559,6 +565,260 @@ const App = {
         }
     },
 
+    async _renderComunidad(groupId = null) {
+        const main = document.getElementById('main-content');
+        if (!this.supabaseClient || !this.estado.usuario) {
+            main.innerHTML = `
+                <div class="page-enter">
+                    <div class="page-header"><div><h1 class="page-title">COMUNIDAD</h1></div></div>
+                    <div class="config-card"><p>La comunidad requiere una cuenta y conexión con Supabase.</p></div>
+                </div>`;
+            return;
+        }
+
+        if (groupId) {
+            try {
+                await this._renderDetalleComunidad(groupId);
+            } catch (error) {
+                main.innerHTML = `<div class="config-card"><p class="config-error">No se pudo abrir el grupo: ${this._escaparHTML(error.message)}</p><button class="btn btn--outline" id="btn-volver-comunidades">Volver a COMUNIDAD</button></div>`;
+                document.getElementById('btn-volver-comunidades')?.addEventListener('click', () => this.navegarA('comunidad'));
+            }
+            return;
+        }
+
+        this.estado.grupoComunidad = null;
+        const { data: grupos, error } = await this.supabaseClient
+            .from('community_groups')
+            .select('id,name,owner_id,created_at')
+            .order('created_at', { ascending: false });
+        if (error) {
+            main.innerHTML = `<div class="config-card"><h1 class="page-title">COMUNIDAD</h1><p class="config-error">No se pudieron cargar los grupos: ${this._escaparHTML(error.message)}. Ejecuta la configuración SQL actualizada de Supabase.</p></div>`;
+            return;
+        }
+
+        main.innerHTML = `
+            <div class="page-enter libros-page">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">COMUNIDAD</h1>
+                        <p class="page-subtitle">Crea grupos de estudio o ingresa con un código para compartir y estudiar PDFs.</p>
+                    </div>
+                </div>
+                <div class="comunidad-acciones">
+                    <form class="config-card comunidad-form" id="form-crear-comunidad">
+                        <h2>Crear un grupo</h2>
+                        <label class="libro-renombrar">Nombre del grupo
+                            <input class="input-num" name="name" maxlength="80" required placeholder="Ej. Grupo de lectura">
+                        </label>
+                        <button class="btn btn--gold" type="submit">Crear grupo y obtener código</button>
+                    </form>
+                    <form class="config-card comunidad-form" id="form-unirse-comunidad">
+                        <h2>Ingresar a un grupo</h2>
+                        <label class="libro-renombrar">Código de ingreso
+                            <input class="input-num" name="code" maxlength="20" minlength="8" required placeholder="Escribe el código">
+                        </label>
+                        <button class="btn btn--outline" type="submit">Ingresar al grupo</button>
+                    </form>
+                </div>
+                <section class="comunidad-grupos">
+                    <h2 class="opcion-label">Mis grupos</h2>
+                    ${(grupos || []).length ? `<div class="leyes-grid">${grupos.map(grupo => `
+                        <article class="ley-card">
+                            <div class="ley-card__header"><span class="ley-card__icon">👥</span><span class="ley-card__badge">${grupo.owner_id === this.estado.usuario.id ? 'Administrador' : 'Miembro'}</span></div>
+                            <div class="ley-card__body"><h2 class="ley-card__titulo">${this._escaparHTML(grupo.name)}</h2></div>
+                            <div class="ley-card__footer"><button class="btn btn--gold btn-abrir-comunidad" data-group-id="${grupo.id}">Abrir grupo</button></div>
+                        </article>`).join('')}</div>` : '<div class="libros-vacio">Todavía no perteneces a ningún grupo. Crea uno o ingresa con un código.</div>'}
+                </section>
+            </div>`;
+
+        document.querySelectorAll('.btn-abrir-comunidad').forEach(button => {
+            button.addEventListener('click', () => this.navegarA('comunidad', { groupId: button.dataset.groupId }));
+        });
+        document.getElementById('form-crear-comunidad')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const submit = form.querySelector('button[type="submit"]');
+            submit.disabled = true;
+            try {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                const random = crypto.getRandomValues(new Uint8Array(12));
+                const code = [...random].map(value => chars[value % chars.length]).join('');
+                const { data: id, error: createError } = await this.supabaseClient.rpc('create_community_group', {
+                    p_name: new FormData(form).get('name'),
+                    p_join_code: code
+                });
+                if (createError) throw new Error(`No se pudo crear el grupo: ${createError.message}`);
+                alert(`Grupo creado. Guarda y comparte este código de ingreso: ${code}`);
+                this.navegarA('comunidad', { groupId: id });
+            } catch (error) {
+                alert(error.message || 'No se pudo crear el grupo.');
+                submit.disabled = false;
+            }
+        });
+        document.getElementById('form-unirse-comunidad')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const submit = form.querySelector('button[type="submit"]');
+            submit.disabled = true;
+            try {
+                const code = String(new FormData(form).get('code') || '').trim().toUpperCase();
+                const { data: id, error: joinError } = await this.supabaseClient.rpc('join_community_group', { p_join_code: code });
+                if (joinError) throw new Error(`No se pudo ingresar al grupo: ${joinError.message}`);
+                this.navegarA('comunidad', { groupId: id });
+            } catch (error) {
+                alert(error.message || 'No se pudo ingresar al grupo.');
+                submit.disabled = false;
+            }
+        });
+    },
+
+    async _renderDetalleComunidad(groupId) {
+        const main = document.getElementById('main-content');
+        const { data: grupo, error: groupError } = await this.supabaseClient
+            .from('community_groups')
+            .select('id,name,owner_id')
+            .eq('id', groupId)
+            .maybeSingle();
+        if (groupError || !grupo) {
+            main.innerHTML = `<div class="config-card"><p class="config-error">No se pudo abrir este grupo. Puede que ya no seas miembro${groupError ? `: ${this._escaparHTML(groupError.message)}` : '.'}</p><button class="btn btn--outline" id="btn-volver-comunidades">Volver a COMUNIDAD</button></div>`;
+            document.getElementById('btn-volver-comunidades')?.addEventListener('click', () => this.navegarA('comunidad'));
+            return;
+        }
+        this.estado.grupoComunidad = grupo;
+        const { data: libros, error: booksError } = await this.supabaseClient
+            .from('community_books')
+            .select('id,group_id,user_id,name,storage_path,created_at')
+            .eq('group_id', groupId)
+            .order('created_at', { ascending: false });
+        if (booksError) {
+            main.innerHTML = `<div class="config-card"><p class="config-error">No se pudieron cargar los PDFs del grupo: ${this._escaparHTML(booksError.message)}</p><button class="btn btn--outline" id="btn-volver-comunidades">Volver a COMUNIDAD</button></div>`;
+            document.getElementById('btn-volver-comunidades')?.addEventListener('click', () => this.navegarA('comunidad'));
+            return;
+        }
+        const librosPreparados = await Promise.all(libros.map(async libro => {
+            const { data, error } = await this.supabaseClient.storage
+                .from('comunidad-pdf')
+                .createSignedUrl(libro.storage_path, 86400);
+            if (error) throw new Error(`No se pudo preparar “${libro.name}” para abrirlo: ${error.message}`);
+            return { ...libro, url: data.signedUrl };
+        }));
+        this.estado.librosComunidad = librosPreparados;
+
+        let codigoInvitacion = '';
+        if (grupo.owner_id === this.estado.usuario.id) {
+            const { data: invite, error: inviteError } = await this.supabaseClient
+                .from('community_invites')
+                .select('join_code')
+                .eq('group_id', groupId)
+                .maybeSingle();
+            if (inviteError) throw new Error(`No se pudo cargar el código del grupo: ${inviteError.message}`);
+            codigoInvitacion = invite?.join_code || '';
+        }
+
+        main.innerHTML = `
+            <div class="page-enter libros-page">
+                <div class="page-header">
+                    <button class="btn btn--ghost" id="btn-volver-comunidades">‹ COMUNIDAD</button>
+                    <div><h1 class="page-title">${this._escaparHTML(grupo.name)}</h1><p class="page-subtitle">PDFs compartidos con los miembros de este grupo.</p></div>
+                    <button type="button" class="btn btn--gold" id="btn-subir-pdf-comunidad">📥 Subir PDF</button>
+                    <input type="file" id="input-pdf-comunidad" accept="application/pdf,.pdf" hidden>
+                </div>
+                ${codigoInvitacion ? `<div class="comunidad-codigo"><span>Código para invitar miembros:</span><strong>${this._escaparHTML(codigoInvitacion)}</strong><button type="button" class="btn btn--outline" id="btn-copiar-codigo">Copiar código</button></div>` : ''}
+                <div id="lista-pdfs-comunidad" class="leyes-grid">
+                    ${librosPreparados.length ? librosPreparados.map(libro => `
+                        <article class="ley-card libro-card">
+                            <div class="ley-card__header libro-card__header"><span class="ley-card__icon">📘</span><span class="ley-card__badge">PDF compartido</span></div>
+                            <div class="ley-card__body"><h2 class="ley-card__titulo">${this._escaparHTML(libro.name)}</h2><p class="ley-card__desc">Subido por un miembro del grupo</p></div>
+                            <div class="ley-card__footer libro-card__footer">
+                                <button class="btn btn--outline btn-comunidad-leer" data-book-id="${libro.id}">Abrir</button>
+                                <button class="btn btn--gold btn-comunidad-quiz" data-book-id="${libro.id}">Generar preguntas</button>
+                                ${libro.user_id === this.estado.usuario.id ? `<button class="btn btn--ghost btn-comunidad-eliminar" data-book-id="${libro.id}">🗑️ Eliminar</button>` : ''}
+                            </div>
+                        </article>`).join('') : '<div class="libros-vacio">Este grupo aún no tiene PDFs. Sube uno para compartirlo con sus miembros.</div>'}
+                </div>
+            </div>`;
+
+        document.getElementById('btn-volver-comunidades')?.addEventListener('click', () => this.navegarA('comunidad'));
+        document.getElementById('btn-subir-pdf-comunidad')?.addEventListener('click', () => document.getElementById('input-pdf-comunidad')?.click());
+        document.getElementById('input-pdf-comunidad')?.addEventListener('change', async event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) await this._subirPDFComunidad(file, grupo);
+        });
+        document.getElementById('btn-copiar-codigo')?.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(codigoInvitacion);
+                alert('Código copiado.');
+            } catch (error) {
+                alert(`No se pudo copiar el código automáticamente: ${error.message}. Cópialo manualmente.`);
+            }
+        });
+        document.querySelectorAll('.btn-comunidad-leer').forEach(button => button.addEventListener('click', () => {
+            this.navegarA('lector', { leyId: this._idLibroComunidad(button.dataset.bookId) });
+        }));
+        document.querySelectorAll('.btn-comunidad-quiz').forEach(button => button.addEventListener('click', () => {
+            this.navegarA('quiz-config', { leyId: this._idLibroComunidad(button.dataset.bookId) });
+        }));
+        document.querySelectorAll('.btn-comunidad-eliminar').forEach(button => button.addEventListener('click', async () => {
+            const libro = this.estado.librosComunidad.find(item => item.id === button.dataset.bookId);
+            if (libro) await this._eliminarPDFComunidad(libro, grupo);
+        }));
+    },
+
+    async _subirPDFComunidad(archivo, grupo) {
+        if (archivo.type !== 'application/pdf' && !archivo.name.toLowerCase().endsWith('.pdf')) {
+            alert('Selecciona un archivo PDF.');
+            return;
+        }
+        if (archivo.size > 50 * 1024 * 1024) {
+            alert('El PDF supera el límite actual de 50 MB de Supabase Storage.');
+            return;
+        }
+        const nombreSugerido = archivo.name.replace(/\.pdf$/i, '');
+        const nombre = prompt('¿Con qué nombre quieres compartir este libro?', nombreSugerido);
+        if (nombre === null) return;
+        if (!nombre.trim() || nombre.trim().length > 100) {
+            alert('El nombre debe tener entre 1 y 100 caracteres.');
+            return;
+        }
+        const storagePath = `community/${grupo.id}/${this.estado.usuario.id}/${crypto.randomUUID()}.pdf`;
+        try {
+            const { error: uploadError } = await this.supabaseClient.storage
+                .from('comunidad-pdf')
+                .upload(storagePath, archivo, { contentType: 'application/pdf', upsert: false });
+            if (uploadError) throw new Error(`No se pudo subir el PDF: ${uploadError.message}`);
+            const { error: insertError } = await this.supabaseClient.from('community_books').insert({
+                group_id: grupo.id,
+                user_id: this.estado.usuario.id,
+                name: nombre.trim(),
+                storage_path: storagePath
+            });
+            if (insertError) {
+                const { error: cleanupError } = await this.supabaseClient.storage.from('comunidad-pdf').remove([storagePath]);
+                throw new Error(`No se pudo registrar el PDF en el grupo: ${insertError.message}${cleanupError ? ` Además, no se pudo limpiar el archivo subido: ${cleanupError.message}` : ''}`);
+            }
+            await this._renderDetalleComunidad(grupo.id);
+        } catch (error) {
+            alert(error.message || 'No se pudo compartir el PDF.');
+        }
+    },
+
+    async _eliminarPDFComunidad(libro, grupo) {
+        if (!confirm(`¿Eliminar “${libro.name}” del grupo? Los demás miembros ya no podrán abrirlo.`)) return;
+        try {
+            const { error: storageError } = await this.supabaseClient.storage
+                .from('comunidad-pdf')
+                .remove([libro.storage_path]);
+            if (storageError) throw new Error(`No se pudo eliminar el archivo: ${storageError.message}`);
+            const { error } = await this.supabaseClient.from('community_books')
+                .delete().eq('id', libro.id).eq('user_id', this.estado.usuario.id);
+            if (error) throw new Error(`No se pudo eliminar el registro del PDF: ${error.message}`);
+            await this._renderDetalleComunidad(grupo.id);
+        } catch (error) {
+            alert(error.message || 'No se pudo eliminar el PDF.');
+        }
+    },
+
     async _renombrarLibro(filename, name) {
         if (!name.trim()) {
             alert('Escribe un nombre para el libro.');
@@ -631,9 +891,27 @@ const App = {
         return `libro:${encodeURIComponent(filename)}`;
     },
 
+    _idLibroComunidad(id) {
+        return `community-book:${id}`;
+    },
+
     _obtenerDocumento(id) {
         const ley = LEYES_DATA.find(item => item.id === id);
         if (ley) return ley;
+        if (id?.startsWith('community-book:')) {
+            const libro = this.estado.librosComunidad.find(item => item.id === id.slice('community-book:'.length));
+            if (!libro) return null;
+            return {
+                id,
+                titulo: libro.name,
+                subtitulo: 'PDF de comunidad',
+                archivo: libro.url,
+                icono: '📘',
+                esLibro: true,
+                esLibroComunidad: true,
+                grupoId: libro.group_id
+            };
+        }
         if (!id?.startsWith('libro:')) return null;
         const filename = decodeURIComponent(id.slice('libro:'.length));
         const libro = this.estado.librosPDF.find(item => item.filename === filename);
@@ -785,7 +1063,10 @@ const App = {
             </div>
         `;
 
-        document.getElementById('btn-back-lector')?.addEventListener('click', () => this.navegarA('biblioteca'));
+        document.getElementById('btn-back-lector')?.addEventListener('click', () => {
+            if (ley.esLibroComunidad) this.navegarA('comunidad', { groupId: ley.grupoId });
+            else this.navegarA('biblioteca');
+        });
         document.getElementById('btn-quiz-desde-lector')?.addEventListener('click', () => {
             this.navegarA('quiz-config', { leyId });
         });
@@ -1175,8 +1456,8 @@ const App = {
                     <div class="opcion-grupo">
                         <label class="opcion-label">Tipos de pregunta</label>
                         <div class="tipos-checks">
-                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="comprension" checked><span class="tipo-check__box" style="--color:#3b82f6"></span><span>Comprensión lectora</span></label>
-                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="titulos" checked><span class="tipo-check__box" style="--color:#8b5cf6"></span><span>Relacionar fragmento con su título</span></label>
+                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="conceptos" checked><span class="tipo-check__box" style="--color:#3b82f6"></span><span>Concepto desarrollado por el título</span></label>
+                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="titulos" checked><span class="tipo-check__box" style="--color:#8b5cf6"></span><span>Relacionar párrafo con su título</span></label>
                             <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="verdadero-falso" checked><span class="tipo-check__box" style="--color:#f59e0b"></span><span>Verdadero o Falso</span></label>
                             <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="completar"><span class="tipo-check__box" style="--color:#22c55e"></span><span>Completar el texto</span></label>
                         </div>
@@ -1186,7 +1467,10 @@ const App = {
                 </div>
             </div>
         `;
-        document.getElementById('btn-back-config')?.addEventListener('click', () => this.navegarA('libros-pdf'));
+        document.getElementById('btn-back-config')?.addEventListener('click', () => {
+            if (libro.esLibroComunidad) this.navegarA('comunidad', { groupId: libro.grupoId });
+            else this.navegarA('libros-pdf');
+        });
         let cantidad = 10;
         document.querySelectorAll('.cant-btn').forEach(button => button.addEventListener('click', () => {
             document.querySelectorAll('.cant-btn').forEach(item => item.classList.remove('cant-btn--active'));
@@ -1409,7 +1693,8 @@ const App = {
                 preguntas = this.engine.generarQuizLectura(
                     this.estado.estructura.fragmentos || [],
                     { cantidad, tipos },
-                    this.estado.estructura.titulosLectura || []
+                    this.estado.estructura.titulosLectura || [],
+                    this.estado.estructura.apartadosLectura || []
                 );
             } else {
                 const articulos = this.parser.filtrarPorRango(

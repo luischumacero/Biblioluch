@@ -71,7 +71,7 @@ class QuizEngine {
         return preguntas.filter(p => p !== null);
     }
 
-    generarQuizLectura(fragmentos, config, titulos = []) {
+    generarQuizLectura(fragmentos, config, titulos = [], apartados = []) {
         const validos = fragmentos.filter(fragmento =>
             fragmento.contenido && fragmento.contenido.replace(/\s+/g, ' ').trim().length > 80
         );
@@ -79,121 +79,138 @@ class QuizEngine {
             throw new Error('No se pudo extraer suficiente texto del libro para generar preguntas. Comprueba que el PDF tenga texto seleccionable.');
         }
 
-        const titulosDetectados = [...new Set([
-            ...titulos,
-            ...validos.map(fragmento => fragmento.titulo).filter(Boolean)
-        ])];
-        const tiposSolicitados = [...new Set(config.tipos)]
-            .filter(tipo => ['comprension', 'verdadero-falso', 'completar', 'titulos'].includes(tipo));
-        const tiposDisponibles = tiposSolicitados.filter(tipo => tipo !== 'titulos' || titulosDetectados.length > 1);
-        const tipos = tiposDisponibles.length ? tiposDisponibles : ['comprension'];
+        const secciones = apartados.length
+            ? apartados.filter(apartado => apartado.titulo && apartado.contenido?.length >= 100)
+            : this._crearApartados(validos, titulos);
+        const tipos = [...new Set(config.tipos)]
+            .filter(tipo => ['conceptos', 'comprension', 'verdadero-falso', 'completar', 'titulos'].includes(tipo))
+            .map(tipo => tipo === 'comprension' ? 'conceptos' : tipo);
+        const necesitaTitulos = tipos.some(tipo => ['conceptos', 'verdadero-falso', 'titulos'].includes(tipo));
+        if (necesitaTitulos && secciones.length < 2) {
+            throw new Error('No se detectaron al menos dos títulos con texto suficiente para crear preguntas de conceptos y relación. Prueba con un PDF que tenga encabezados y texto seleccionable.');
+        }
+        const tiposDisponibles = tipos.filter(tipo => !['conceptos', 'verdadero-falso', 'titulos'].includes(tipo) || secciones.length > 1);
+        if (tiposDisponibles.length === 0) {
+            throw new Error('Selecciona un tipo de pregunta compatible con la estructura que se detectó en el libro.');
+        }
         const cantidad = Math.min(config.cantidad, validos.length);
         const plan = [];
 
-        while (plan.length < cantidad) {
-            plan.push(...this._mezclar(tipos));
-        }
+        while (plan.length < cantidad) plan.push(...this._mezclar(tiposDisponibles));
         plan.length = cantidad;
 
         const pendientes = this._aleatorio(validos, validos.length);
         const preguntas = [];
         for (const tipo of plan) {
-            let indice = tipo === 'titulos'
-                ? pendientes.findIndex(fragmento => fragmento.titulo && titulosDetectados.includes(fragmento.titulo))
-                : -1;
-            if (indice < 0) indice = 0;
-            const [fragmento] = pendientes.splice(indice, 1);
-            let pregunta;
-
-            if (tipo === 'titulos' && fragmento.titulo && titulosDetectados.length > 1) {
-                pregunta = this._preguntaTitulo(fragmento, titulosDetectados);
-            } else if (tipo === 'verdadero-falso') {
-                pregunta = this._preguntaLecturaVF(fragmento, validos);
+            if (tipo === 'conceptos') {
+                const apartado = this._aleatorio(secciones, 1)[0];
+                preguntas.push(this._preguntaConcepto(apartado, secciones));
+            } else if (tipo === 'titulos' || tipo === 'verdadero-falso') {
+                const apartado = this._aleatorio(secciones, 1)[0];
+                const fragmento = this._aleatorio(apartado.fragmentos, 1)[0];
+                if (!fragmento) throw new Error(`El apartado “${apartado.titulo}” no tiene párrafos utilizables.`);
+                if (tipo === 'titulos') {
+                    preguntas.push(this._preguntaTitulo(fragmento, secciones));
+                } else {
+                    preguntas.push(this._preguntaLecturaVF(fragmento, secciones));
+                }
             } else if (tipo === 'completar') {
-                pregunta = this._preguntaLecturaCompletar(fragmento, validos);
-            } else {
-                pregunta = this._preguntaComprension(fragmento, validos);
+                const fragmento = pendientes.shift();
+                preguntas.push(this._preguntaLecturaCompletar(fragmento, validos));
             }
-            preguntas.push(pregunta);
         }
         return preguntas;
     }
 
-    _preguntaComprension(fragmento, todos) {
-        const textoCorrecto = this._fraseClave(fragmento.contenido);
-        const correcta = this._htmlSeguro(textoCorrecto);
-        const distractores = this._aleatorio([...new Set(
-            todos
-                .filter(item => item.numero !== fragmento.numero)
+    _crearApartados(fragmentos, titulos = []) {
+        const candidatos = new Map();
+        for (const fragmento of fragmentos) {
+            if (!fragmento.titulo) continue;
+            const key = fragmento.titulo.toLocaleLowerCase();
+            if (!candidatos.has(key)) {
+                candidatos.set(key, { titulo: fragmento.titulo, contenido: [], fragmentos: [] });
+            }
+            const apartado = candidatos.get(key);
+            apartado.contenido.push(fragmento.contenido);
+            apartado.fragmentos.push(fragmento);
+        }
+        const tituloSet = new Set(titulos.map(titulo => titulo.toLocaleLowerCase()));
+        return [...candidatos.values()]
+            .map(apartado => ({
+                ...apartado,
+                contenido: apartado.contenido.join(' ').replace(/\s+/g, ' ').trim()
+            }))
+            .filter(apartado => apartado.contenido.length >= 100 &&
+                (!tituloSet.size || tituloSet.has(apartado.titulo.toLocaleLowerCase())));
+    }
+
+    _preguntaConcepto(apartado, todos) {
+        if (!apartado) throw new Error('No se pudo asociar un fragmento con su título.');
+        const correcta = this._htmlSeguro(this._fraseClave(apartado.contenido));
+        const distractores = this._aleatorio(
+            [...new Set(todos
+                .filter(item => item.titulo !== apartado.titulo)
                 .map(item => this._fraseClave(item.contenido))
-                .filter(texto => texto && texto !== textoCorrecto)
-        )], 3).map(item => this._htmlSeguro(item));
+                .filter(texto => texto && texto !== this._fraseClave(apartado.contenido)))],
+            3
+        ).map(item => this._htmlSeguro(item));
         const opciones = this._mezclar([correcta, ...distractores]);
-        const preguntas = [
-            'Según el fragmento, ¿qué idea se expresa?',
-            '¿Cuál afirmación está respaldada por el texto mostrado?',
-            '¿Qué se puede concluir a partir de este pasaje?',
-            '¿Qué idea resume mejor la información del fragmento?'
-        ];
         return {
             id: this._uid(),
-            tipo: 'comprension',
-            tipoLabel: 'Comprensión de ideas',
+            tipo: 'conceptos',
+            tipoLabel: 'Concepto del título',
             tipoColor: '#3b82f6',
-            pregunta: preguntas[Math.floor(Math.random() * preguntas.length)],
-            fragmento: this._htmlSeguro(this._recortarFragmento(fragmento.contenido)),
+            pregunta: `¿Qué concepto desarrolla el apartado “${this._htmlSeguro(apartado.titulo)}”?`,
             opciones,
             respuestaCorrecta: correcta,
-            contexto: this._contextoLectura(fragmento),
-            explicacion: `La opción correcta aparece en el fragmento mostrado:\n\n"${this._htmlSeguro(fragmento.contenido)}"`,
-            contenidoCompleto: fragmento.contenido
+            contexto: 'Relaciona el título con su contenido',
+            explicacion: `El apartado “${this._htmlSeguro(apartado.titulo)}” desarrolla este concepto:\n\n"${this._htmlSeguro(apartado.contenido)}"`,
+            contenidoCompleto: apartado.contenido
         };
     }
 
-    _preguntaTitulo(fragmento, titulos) {
-        const correcta = this._htmlSeguro(fragmento.titulo);
+    _preguntaTitulo(fragmento, apartados) {
+        const apartado = apartados.find(item => item.titulo === fragmento.titulo);
+        if (!apartado) throw new Error('No se pudo asociar el párrafo con un título detectado.');
+        const correcta = this._htmlSeguro(apartado.titulo);
         const distractores = this._aleatorio(
-            titulos.filter(titulo => titulo !== fragmento.titulo),
-            Math.min(3, titulos.length - 1)
-        ).map(titulo => this._htmlSeguro(titulo));
+            apartados.filter(item => item.titulo !== apartado.titulo),
+            3
+        ).map(item => this._htmlSeguro(item.titulo));
         const opciones = this._mezclar([correcta, ...distractores]);
         return {
             id: this._uid(),
             tipo: 'titulos',
-            tipoLabel: 'Relacionar con el título',
+            tipoLabel: 'Relacionar párrafo y título',
             tipoColor: '#8b5cf6',
-            pregunta: '¿Qué título o encabezado corresponde al fragmento?',
+            pregunta: '¿A cuál título corresponde este párrafo?',
             fragmento: this._htmlSeguro(this._recortarFragmento(fragmento.contenido)),
             opciones,
             respuestaCorrecta: correcta,
-            contexto: 'Identifica el apartado por su contenido',
-            explicacion: `El encabezado detectado antes de este texto es "${correcta}".\n\nFragmento:\n"${this._htmlSeguro(fragmento.contenido)}"`,
+            contexto: 'Identifica el título que desarrolla el párrafo',
+            explicacion: `Este párrafo pertenece al título “${correcta}”.\n\nContenido del apartado:\n"${this._htmlSeguro(apartado.contenido)}"`,
             contenidoCompleto: fragmento.contenido
         };
     }
 
-    _preguntaLecturaVF(fragmento, todos) {
+    _preguntaLecturaVF(fragmento, apartados) {
+        const apartado = apartados.find(item => item.titulo === fragmento.titulo);
+        if (!apartado) throw new Error('No se pudo asociar el párrafo con su título para crear verdadero o falso.');
         const esVerdadero = Math.random() < 0.5;
-        const otro = this._aleatorio(
-            todos.filter(item => item.numero !== fragmento.numero),
-            1
-        )[0];
-        if (!otro) return this._preguntaComprension(fragmento, todos);
-        const afirmacion = this._htmlSeguro(esVerdadero
-            ? this._fraseClave(fragmento.contenido)
-            : this._fraseClave(otro.contenido));
+        const otro = this._aleatorio(apartados.filter(item => item.titulo !== apartado.titulo), 1)[0];
+        const tituloPropuesto = esVerdadero ? apartado.titulo : otro.titulo;
         return {
             id: this._uid(),
             tipo: 'verdadero-falso',
             tipoLabel: 'Verdadero o Falso',
             tipoColor: '#f59e0b',
-            pregunta: '¿Esta afirmación se puede comprobar en el fragmento mostrado?',
+            pregunta: '¿El párrafo corresponde al título indicado?',
             fragmento: this._htmlSeguro(this._recortarFragmento(fragmento.contenido)),
-            enunciado: `“${afirmacion}”`,
+            enunciado: `Título: <strong>${this._htmlSeguro(tituloPropuesto)}</strong>`,
             opciones: this._mezclar(['Verdadero', 'Falso']),
             respuestaCorrecta: esVerdadero ? 'Verdadero' : 'Falso',
-            contexto: this._contextoLectura(fragmento),
-            explicacion: `El fragmento analizado dice:\n\n"${this._htmlSeguro(fragmento.contenido)}"`,
+            contexto: 'Comprueba la relación entre título y párrafo',
+            explicacion: `La respuesta es ${esVerdadero ? 'Verdadero' : 'Falso'}. El párrafo mostrado pertenece al título “${this._htmlSeguro(apartado.titulo)}”.`,
             contenidoCompleto: fragmento.contenido
         };
     }
@@ -201,7 +218,7 @@ class QuizEngine {
     _preguntaLecturaCompletar(fragmento, todos) {
         const palabras = fragmento.contenido.match(/\b[\p{L}]{5,}\b/gu) || [];
         const palabra = palabras[Math.floor(palabras.length / 2)];
-        if (!palabra) return this._preguntaComprension(fragmento, todos);
+        if (!palabra) throw new Error('No se encontró una palabra adecuada para crear una pregunta de completar.');
 
         const escaped = palabra.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const textoConEspacio = this._htmlSeguro(fragmento.contenido)

@@ -1,11 +1,11 @@
 # Conectar Biblioluch con Supabase
 
-La biblioteca personal de PDFs usa Supabase Auth, una tabla con políticas RLS y un bucket privado de Storage. Los libros nuevos pertenecen a la cuenta que los subió. La tabla incluye `is_shared` para poder agregar una biblioteca compartida después; por ahora no hay una pantalla para publicar ni compartir libros.
+La biblioteca personal y la sección COMUNIDAD usan Supabase Auth, políticas RLS y buckets privados. Los PDFs comunitarios solo son visibles para miembros del grupo al que fueron subidos.
 
 ## Preparar el proyecto
 
 1. Abre el proyecto de Supabase que ya creaste.
-2. En **SQL Editor**, ejecuta el contenido de [`supabase/setup.sql`](./supabase/setup.sql). Esto crea `public.libros_pdf`, sus políticas de acceso y el bucket privado `libros-pdf`.
+2. En **SQL Editor**, ejecuta el contenido actualizado de [`supabase/setup.sql`](./supabase/setup.sql). Esto crea las tablas y políticas de la biblioteca personal y de COMUNIDAD, además de los buckets privados `libros-pdf` y `comunidad-pdf`. Si ya ejecutaste una versión anterior, vuelve a ejecutar este archivo para aplicar las tablas, funciones y políticas comunitarias.
 3. En **Authentication → Providers → Email**, habilita correo y contraseña. En **Authentication → URL Configuration**:
    - En **Site URL**, coloca la URL real de tu aplicación publicada en Cloudflare, por ejemplo `https://biblioluch.<tu-cuenta>.workers.dev` (usa el dominio que aparece al abrir la web; no `github.io`).
    - En **Redirect URLs**, agrega esa misma dirección y `http://localhost:8080/**` para pruebas locales. La aplicación solicita redirigir la confirmación al mismo origen desde el que se creó la cuenta, así que todo dominio/preview que utilices debe estar permitido aquí.
@@ -22,9 +22,10 @@ El sitio es estático y sus PDFs personales viven en Supabase. El archivo [`.ass
 
 - Con Supabase configurado, el inicio de sesión es requisito para entrar al sitio. Al cerrar sesión se vuelve a la pantalla de acceso; la versión local sin configuración de Supabase conserva el acceso actual.
 - Los libros importados se suben al bucket privado y cada usuario solo ve/renombra/elimina sus propios libros.
+- En **COMUNIDAD**, cualquier usuario con sesión puede crear un grupo y compartir su código de ingreso. Otros usuarios autenticados se unen con ese código. Los miembros pueden ver, abrir y generar preguntas sobre los PDFs del grupo; solo quien subió un PDF puede eliminarlo.
+- Los archivos comunitarios se guardan en el bucket privado `comunidad-pdf`; las políticas RLS verifican la membresía tanto para la tabla como para Storage. No hagas público ese bucket ni añadas claves secretas al frontend.
 - Para el flujo de confirmación de correo, cada persona debe confirmar su cuenta antes de iniciar sesión si la confirmación está habilitada en el proyecto.
 - Si un correo de confirmación ya enviado abre el antiguo 404 de GitHub Pages, cambiar el código no modifica ese enlace ya generado: actualiza **Site URL** y **Redirect URLs** y vuelve a enviar la confirmación (o crea una cuenta nueva para probar). Los siguientes correos usarán el dominio actual de la aplicación.
 - El cliente limita las cargas a 50 MB y el bucket se configura con el mismo límite. Puedes ajustarlo en Supabase Storage si tu proyecto lo permite.
 - La app local continúa usando el servidor local cuando no hay credenciales configuradas. La versión en GitHub Pages necesita la configuración de Supabase para guardar PDFs; GitHub Pages por sí solo no almacena archivos.
-- Para una futura sección de libros compartidos, la tabla y las políticas ya contemplan `is_shared`; deberá añadirse una acción explícita para compartir y una vista separada. Los libros no se comparten automáticamente.
 - La clave secreta del proyecto no es necesaria para la app del navegador. Si la compartiste fuera de Supabase, rótala desde el panel del proyecto antes de desplegar.

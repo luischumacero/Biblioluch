@@ -23,7 +23,7 @@ class PDFParser {
      * @returns {Object} Estructura jerárquica del PDF
      */
     async cargarYParsear(url, onProgreso = () => {}) {
-        const claveCache = 'bibliolex_v4_' + url.replace(/[^a-z0-9]/gi, '_');
+        const claveCache = 'bibliolex_v5_' + url.replace(/[^a-z0-9]/gi, '_');
         const cacheable = !/\/LIBROS(?:%20| )PDF\//i.test(url);
 
         // Intentar leer desde caché solo para las leyes incluidas en la aplicación.
@@ -77,6 +77,7 @@ class PDFParser {
         const analisisLectura = this.analizarTextoLectura(textoCompleto);
         estructura.fragmentos = analisisLectura.fragmentos;
         estructura.titulosLectura = analisisLectura.titulos;
+        estructura.apartadosLectura = analisisLectura.apartados;
         estructura.totalPaginas = totalPaginas;
 
         onProgreso(95, `Encontrados ${estructura.articulos.length} artículos`);
@@ -110,6 +111,7 @@ class PDFParser {
         const fragmentos = [];
         const titulos = [];
         const titulosVistos = new Set();
+        const apartados = [];
         let tituloActual = '';
         let buffer = [];
         let longitudBuffer = 0;
@@ -121,7 +123,8 @@ class PDFParser {
                 fragmentos.push({
                     numero: fragmentos.length + 1,
                     contenido,
-                    titulo: tituloActual || null
+                    titulo: tituloActual || null,
+                    tituloId: tituloActual ? tituloActual.toLocaleLowerCase() : null
                 });
             }
             buffer = [];
@@ -157,7 +160,32 @@ class PDFParser {
         }
         guardarFragmento();
 
-        return { fragmentos, titulos };
+        const porTitulo = new Map();
+        for (const fragmento of fragmentos) {
+            if (!fragmento.tituloId) continue;
+            if (!porTitulo.has(fragmento.tituloId)) {
+                porTitulo.set(fragmento.tituloId, {
+                    titulo: fragmento.titulo,
+                    contenido: [],
+                    fragmentos: []
+                });
+            }
+            const apartado = porTitulo.get(fragmento.tituloId);
+            apartado.contenido.push(fragmento.contenido);
+            apartado.fragmentos.push(fragmento);
+        }
+        for (const apartado of porTitulo.values()) {
+            const contenido = apartado.contenido.join(' ').replace(/\s+/g, ' ').trim();
+            if (contenido.length >= 100) {
+                apartados.push({
+                    titulo: apartado.titulo,
+                    contenido,
+                    fragmentos: apartado.fragmentos
+                });
+            }
+        }
+
+        return { fragmentos, titulos, apartados };
     }
 
     _pareceTituloLectura(linea) {
@@ -448,7 +476,7 @@ class PDFParser {
 
     /** Borra el caché de un PDF específico (para forzar re-parseo) */
     limpiarCachePDF(url) {
-        const clave = 'bibliolex_v4_' + url.replace(/[^a-z0-9]/gi, '_');
+        const clave = 'bibliolex_v5_' + url.replace(/[^a-z0-9]/gi, '_');
         localStorage.removeItem(clave);
     }
 }
