@@ -12,6 +12,10 @@ La biblioteca personal de PDFs usa Supabase Auth, una tabla con políticas RLS y
 
 6. Publica los cambios de la aplicación. La URL y clave publishable se usan en el navegador; la seguridad de los datos depende de las políticas RLS del SQL, no de ocultar la clave pública.
 
+## Publicar en Cloudflare Workers
+
+El sitio es estático y sus PDFs personales viven en Supabase. El archivo [`.assetsignore`](./.assetsignore) impide que Cloudflare publique `node_modules` (que puede contener el binario `workerd`), la carpeta local `LIBROS PDF` y archivos de configuración/servidor que no son recursos de la web. Mantén `node_modules/` también en `.gitignore`; no cambies el directorio de recursos de Workers a la raíz sin conservar estas exclusiones.
+
 ## Uso y límites
 
 - Los libros importados se suben al bucket privado y cada usuario solo ve/renombra/elimina sus propios libros.
