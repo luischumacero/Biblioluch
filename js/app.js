@@ -1007,7 +1007,7 @@ const App = {
         const main = document.getElementById('main-content');
 
         main.innerHTML = `
-            <div class="lector-wrap page-enter">
+            <div class="lector-wrap page-enter ${ley.esLibro ? 'lector-wrap--solo-pdf' : ''}">
                 <div class="lector-topbar">
                     <button class="btn btn--ghost btn-back" id="btn-back-lector">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
@@ -1028,7 +1028,7 @@ const App = {
                 </div>
 
                 <div class="lector-body">
-                    <aside class="lector-sidebar" id="lector-sidebar">
+                    ${ley.esLibro ? '' : `<aside class="lector-sidebar" id="lector-sidebar">
                         <div class="lector-sidebar__header">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
@@ -1043,7 +1043,7 @@ const App = {
                                 <span>Analizando estructura...</span>
                             </div>
                         </div>
-                    </aside>
+                    </aside>`}
 
                     <div class="lector-pdf-wrap">
                         <object
@@ -1071,8 +1071,7 @@ const App = {
             this.navegarA('quiz-config', { leyId });
         });
 
-        // Cargar estructura en background para el sidebar
-        this._cargarEstructuraSidebar(ley);
+        if (!ley.esLibro) this._cargarEstructuraSidebar(ley);
     },
 
     async _cargarEstructuraSidebar(ley) {

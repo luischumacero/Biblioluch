@@ -716,6 +716,8 @@ body.auth-required .auth-wrap {
     flex: 1;
     min-height: 0;
 }
+.lector-wrap--solo-pdf .lector-body { width: 100%; }
+.lector-wrap--solo-pdf .lector-pdf-wrap { width: 100%; }
 
 .lector-sidebar {
     width: 260px;

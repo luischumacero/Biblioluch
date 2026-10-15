@@ -23,7 +23,7 @@ class PDFParser {
      * @returns {Object} Estructura jerárquica del PDF
      */
     async cargarYParsear(url, onProgreso = () => {}) {
-        const claveCache = 'bibliolex_v5_' + url.replace(/[^a-z0-9]/gi, '_');
+        const claveCache = 'bibliolex_v6_' + url.replace(/[^a-z0-9]/gi, '_');
         const cacheable = !/\/LIBROS(?:%20| )PDF\//i.test(url);
 
         // Intentar leer desde caché solo para las leyes incluidas en la aplicación.
@@ -61,10 +61,12 @@ class PDFParser {
 
         // Extraer texto página por página
         let textoCompleto = '';
+        let textoParaLectura = '';
         for (let i = 1; i <= totalPaginas; i++) {
             const pagina = await pdf.getPage(i);
             const contenido = await pagina.getTextContent();
             textoCompleto += this._textosDePagina(contenido) + '\n--- SALTO DE PAGINA ---\n';
+            textoParaLectura += this._textosDePagina(contenido, true) + '\n--- SALTO DE PAGINA ---\n';
 
             const progreso = 10 + Math.floor((i / totalPaginas) * 65);
             onProgreso(progreso, `Extrayendo página ${i} de ${totalPaginas}...`);
@@ -74,7 +76,7 @@ class PDFParser {
 
         // Parsear estructura
         const estructura = this.parsearEstructura(textoCompleto);
-        const analisisLectura = this.analizarTextoLectura(textoCompleto);
+        const analisisLectura = this.analizarTextoLectura(textoParaLectura);
         estructura.fragmentos = analisisLectura.fragmentos;
         estructura.titulosLectura = analisisLectura.titulos;
         estructura.apartadosLectura = analisisLectura.apartados;
@@ -101,10 +103,18 @@ class PDFParser {
         const lineas = texto
             .split(/\n|--- SALTO DE PAGINA ---/)
             .map(linea => linea.replace(/\s+/g, ' ').trim())
-            .filter(Boolean);
+            .filter(Boolean)
+            .map(linea => {
+                const match = linea.match(/^\u0001ENCABEZADO:(\d)\u0001(.*)$/);
+                return {
+                    texto: match ? match[2].trim() : linea,
+                    nivel: match ? Number(match[1]) : null
+                };
+            })
+            .filter(linea => linea.texto);
         const frecuenciaLineas = new Map();
         for (const linea of lineas) {
-            const clave = linea.toLocaleLowerCase();
+            const clave = linea.texto.toLocaleLowerCase();
             frecuenciaLineas.set(clave, (frecuenciaLineas.get(clave) || 0) + 1);
         }
 
@@ -113,6 +123,7 @@ class PDFParser {
         const titulosVistos = new Set();
         const apartados = [];
         let tituloActual = '';
+        let nivelTituloActual = 1;
         let buffer = [];
         let longitudBuffer = 0;
         const longitudObjetivo = 430;
@@ -124,22 +135,26 @@ class PDFParser {
                     numero: fragmentos.length + 1,
                     contenido,
                     titulo: tituloActual || null,
-                    tituloId: tituloActual ? tituloActual.toLocaleLowerCase() : null
+                    tituloId: tituloActual ? tituloActual.toLocaleLowerCase() : null,
+                    nivelTitulo: nivelTituloActual
                 });
             }
             buffer = [];
             longitudBuffer = 0;
         };
 
-        for (const linea of lineas) {
+        for (const lineaInfo of lineas) {
+            const linea = lineaInfo.texto;
             if (/^\d{1,4}$/.test(linea)) continue;
             const clave = linea.toLocaleLowerCase();
             const veces = frecuenciaLineas.get(clave) || 0;
-            if (veces > 2 && this._pareceTituloLectura(linea)) continue;
+            const esTitulo = lineaInfo.nivel !== null || this._pareceTituloLectura(linea);
+            if (veces > 2 && esTitulo) continue;
 
-            if (this._pareceTituloLectura(linea)) {
+            if (esTitulo) {
                 guardarFragmento();
                 tituloActual = linea;
+                nivelTituloActual = lineaInfo.nivel || this._nivelTituloLectura(linea);
                 if (!titulosVistos.has(clave)) {
                     titulosVistos.add(clave);
                     titulos.push(linea);
@@ -180,7 +195,8 @@ class PDFParser {
                 apartados.push({
                     titulo: apartado.titulo,
                     contenido,
-                    fragmentos: apartado.fragmentos
+                    fragmentos: apartado.fragmentos,
+                    nivel: apartado.fragmentos[0]?.nivelTitulo || 1
                 });
             }
         }
@@ -189,28 +205,70 @@ class PDFParser {
     }
 
     _pareceTituloLectura(linea) {
-        if (linea.length < 4 || linea.length > 110 || /[.!?;]$/.test(linea)) return false;
-        if (/^(?:CAP[IÍ]TULO|T[IÍ]TULO|SECCI[ÓO]N|PARTE|LIBRO|INTRODUCCI[ÓO]N|CONCLUSI[ÓO]N|PR[ÓO]LOGO|EP[IÍ]LOGO|PREFACIO|ANEXO|AP[EÉ]NDICE|BIBLIOGRAF[IÍ]A)\b/i.test(linea)) return true;
-        if (!/[A-ZÁÉÍÓÚÑ]/.test(linea)) return false;
+        const limpio = linea.replace(/^\d+(?:\.\d+)*[.)]?\s*/, '').trim();
+        if (limpio.length < 4 || limpio.length > 110 || /[.!?;:]$/.test(limpio)) return false;
+        if (/^(?:CAP[IÍ]TULO|T[IÍ]TULO|SECCI[ÓO]N|PARTE|LIBRO|TEMA|UNIDAD|M[ÓO]DULO|INTRODUCCI[ÓO]N|CONCLUSI[ÓO]N|PR[ÓO]LOGO|EP[IÍ]LOGO|PREFACIO|ANEXO|AP[EÉ]NDICE|BIBLIOGRAF[IÍ]A)\b/i.test(limpio)) return true;
+        if (/^(?:ART[IÍ]CULO|ART\.)\s*\d+/i.test(limpio)) return false;
 
-        const letras = linea.match(/\p{L}/gu) || [];
-        const mayusculas = linea.match(/[A-ZÁÉÍÓÚÑ]/g) || [];
-        const palabras = linea.split(/\s+/);
-        return letras.length >= 4 &&
-            mayusculas.length / letras.length > 0.72 &&
-            palabras.length <= 14 &&
-            !/^(?:ART[IÍ]CULO|ART\.)\s*\d+/i.test(linea);
+        const palabras = limpio.split(/\s+/);
+        if (palabras.length > 9) return false;
+        const letras = limpio.match(/\p{L}/gu) || [];
+        const mayusculas = limpio.match(/[A-ZÁÉÍÓÚÑ]/g) || [];
+        if (letras.length >= 4 && mayusculas.length / letras.length > 0.72) return true;
+
+        const empiezaEnumerado = /^\d+(?:\.\d+)*[.)]?\s+/.test(linea) ||
+            /^(?:[IVXLCDM]+|[A-Z])[\.)]\s+/i.test(linea);
+        if (empiezaEnumerado) return palabras.length <= 12;
+
+        const conectores = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'o', 'en', 'para', 'por', 'con', 'al']);
+        const palabrasEnMayusculaInicial = palabras.filter(palabra =>
+            /^[A-ZÁÉÍÓÚÑ]/.test(palabra) || conectores.has(palabra.toLocaleLowerCase())
+        ).length;
+        const tieneFormaDeTitulo = palabrasEnMayusculaInicial >= Math.max(1, Math.ceil(palabras.length * 0.5));
+        const contieneVerboComun = /\b(?:es|son|está|están|fue|fueron|será|serán|tiene|tienen|puede|pueden|debe|deben|permite|permiten|consiste|consisten|define|definen|establece|establecen|señala|señalan|considera|consideran)\b/i.test(limpio);
+        return tieneFormaDeTitulo && !contieneVerboComun && palabras.length <= 7 && limpio.length <= 75;
+    }
+
+    _nivelTituloLectura(linea) {
+        if (/^(?:CAP[IÍ]TULO|T[IÍ]TULO|PARTE|LIBRO|TEMA|UNIDAD|M[ÓO]DULO)\b/i.test(linea)) return 1;
+        if (/^\d+(?:\.\d+)+/.test(linea)) return Math.min(4, (linea.match(/\./g) || []).length + 1);
+        return 2;
     }
 
     /**
      * Extrae texto de una página de PDF.js, manteniendo saltos de línea.
      */
-    _textosDePagina(contenido) {
+    _textosDePagina(contenido, marcarTitulos = false) {
         if (!contenido.items || contenido.items.length === 0) return '';
 
         let lineas = [];
         let lineaActual = '';
         let yAnterior = null;
+        let tamanioActual = 0;
+        let negritaActual = false;
+        const tamanios = contenido.items
+            .map(item => Math.max(Math.abs(item.transform?.[0] || 0), Math.abs(item.transform?.[3] || 0), item.height || 0))
+            .filter(tamanio => tamanio > 0);
+        const tamanioBase = tamanios.length
+            ? [...tamanios].sort((a, b) => a - b)[Math.floor((tamanios.length - 1) / 2)]
+            : 0;
+        const guardarLinea = () => {
+            if (!lineaActual.trim()) return;
+            const texto = lineaActual.trim();
+            const palabras = texto.split(/\s+/);
+            const pareceEncabezado = texto.length >= 4 && texto.length <= 110 &&
+                palabras.length <= 14 && !/[.!?;:]$/.test(texto);
+            const destacadoPorTamanio = tamanioBase > 0 &&
+                tamanioActual >= tamanioBase + 1.5 &&
+                tamanioActual >= tamanioBase * 1.14;
+            const destacadoPorFormato = negritaActual && palabras.length <= 9;
+            const nivel = destacadoPorTamanio
+                ? (tamanioActual >= tamanioBase * 1.5 ? 1 : 2)
+                : 2;
+            lineas.push(marcarTitulos && pareceEncabezado && (destacadoPorTamanio || destacadoPorFormato)
+                ? `\u0001ENCABEZADO:${nivel}\u0001${texto}`
+                : texto);
+        };
 
         for (const item of contenido.items) {
             if (!item.str) continue;
@@ -218,16 +276,25 @@ class PDFParser {
             const y = Math.round(item.transform[5]);
 
             if (yAnterior !== null && Math.abs(y - yAnterior) > 3) {
-                if (lineaActual.trim()) lineas.push(lineaActual.trim());
+                guardarLinea();
                 lineaActual = '';
+                tamanioActual = 0;
+                negritaActual = false;
             }
 
             lineaActual += item.str;
             if (!item.str.endsWith(' ')) lineaActual += ' ';
+            tamanioActual = Math.max(
+                tamanioActual,
+                Math.abs(item.transform?.[0] || 0),
+                Math.abs(item.transform?.[3] || 0),
+                item.height || 0
+            );
+            negritaActual ||= /bold|black|semibold|demi/i.test(item.fontName || '');
             yAnterior = y;
         }
 
-        if (lineaActual.trim()) lineas.push(lineaActual.trim());
+        guardarLinea();
 
         return lineas.join('\n');
     }
@@ -476,7 +543,7 @@ class PDFParser {
 
     /** Borra el caché de un PDF específico (para forzar re-parseo) */
     limpiarCachePDF(url) {
-        const clave = 'bibliolex_v5_' + url.replace(/[^a-z0-9]/gi, '_');
+        const clave = 'bibliolex_v6_' + url.replace(/[^a-z0-9]/gi, '_');
         localStorage.removeItem(clave);
     }
 }
