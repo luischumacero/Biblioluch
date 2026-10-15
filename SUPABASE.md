@@ -6,7 +6,9 @@ La biblioteca personal de PDFs usa Supabase Auth, una tabla con políticas RLS y
 
 1. Abre el proyecto de Supabase que ya creaste.
 2. En **SQL Editor**, ejecuta el contenido de [`supabase/setup.sql`](./supabase/setup.sql). Esto crea `public.libros_pdf`, sus políticas de acceso y el bucket privado `libros-pdf`.
-3. En **Authentication → Providers → Email**, habilita correo y contraseña. Configura también las URLs de redirección de tu sitio publicado en **Authentication → URL Configuration**.
+3. En **Authentication → Providers → Email**, habilita correo y contraseña. En **Authentication → URL Configuration**:
+   - En **Site URL**, coloca la URL real de tu aplicación publicada en Cloudflare, por ejemplo `https://biblioluch.<tu-cuenta>.workers.dev` (usa el dominio que aparece al abrir la web; no `github.io`).
+   - En **Redirect URLs**, agrega esa misma dirección y `http://localhost:8080/**` para pruebas locales. La aplicación solicita redirigir la confirmación al mismo origen desde el que se creó la cuenta, así que todo dominio/preview que utilices debe estar permitido aquí.
 4. El Project URL y la clave pública **publishable** ya están guardados en [`js/supabase-config.js`](./js/supabase-config.js). Para cambiar o renovar la clave, edita ese archivo con los valores de **Project Settings → API**.
 5. Nunca uses ni publiques `service_role` o una clave `sb_secret_...` en el navegador, en `js/supabase-config.js` ni en Git. Si una operación futura requiere una clave secreta, debe ejecutarse exclusivamente en un backend con variables de entorno privadas.
 
@@ -18,8 +20,10 @@ El sitio es estático y sus PDFs personales viven en Supabase. El archivo [`.ass
 
 ## Uso y límites
 
+- Con Supabase configurado, el inicio de sesión es requisito para entrar al sitio. Al cerrar sesión se vuelve a la pantalla de acceso; la versión local sin configuración de Supabase conserva el acceso actual.
 - Los libros importados se suben al bucket privado y cada usuario solo ve/renombra/elimina sus propios libros.
 - Para el flujo de confirmación de correo, cada persona debe confirmar su cuenta antes de iniciar sesión si la confirmación está habilitada en el proyecto.
+- Si un correo de confirmación ya enviado abre el antiguo 404 de GitHub Pages, cambiar el código no modifica ese enlace ya generado: actualiza **Site URL** y **Redirect URLs** y vuelve a enviar la confirmación (o crea una cuenta nueva para probar). Los siguientes correos usarán el dominio actual de la aplicación.
 - El cliente limita las cargas a 50 MB y el bucket se configura con el mismo límite. Puedes ajustarlo en Supabase Storage si tu proyecto lo permite.
 - La app local continúa usando el servidor local cuando no hay credenciales configuradas. La versión en GitHub Pages necesita la configuración de Supabase para guardar PDFs; GitHub Pages por sí solo no almacena archivos.
 - Para una futura sección de libros compartidos, la tabla y las políticas ya contemplan `is_shared`; deberá añadirse una acción explícita para compartir y una vista separada. Los libros no se comparten automáticamente.

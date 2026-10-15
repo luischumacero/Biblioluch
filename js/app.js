@@ -49,6 +49,10 @@ const App = {
         this.engine = new QuizEngine();
         this._attachSidebarEvents();
         await this._inicializarSupabase();
+        if (this.supabaseClient && !this.estado.usuario) {
+            this._mostrarAutenticacion('biblioteca');
+            return;
+        }
         this.navegarA('biblioteca');
     },
 
@@ -68,11 +72,13 @@ const App = {
         if (error) throw new Error(`No se pudo recuperar la sesión de Supabase: ${error.message}`);
         this.estado.usuario = data.session?.user || null;
 
-        this.supabaseClient.auth.onAuthStateChange((_event, session) => {
+        this.supabaseClient.auth.onAuthStateChange((event, session) => {
             this.estado.usuario = session?.user || null;
             this._actualizarCuentaSupabase();
-            if (!this.estado.usuario && this.estado.vista === 'libros-pdf') {
-                this._mostrarAutenticacion('libros-pdf');
+            if (!this.estado.usuario && this.estado.vista !== 'auth') {
+                this._mostrarAutenticacion('biblioteca');
+            } else if (this.estado.usuario && event === 'SIGNED_IN' && this.estado.vista === 'auth') {
+                this.navegarA(this.estado.vistaDespuesDeAuth || 'biblioteca');
             }
         });
         this._actualizarCuentaSupabase();
@@ -140,6 +146,11 @@ const App = {
     },
 
     navegarA(vista, params = {}) {
+        if (this.supabaseClient && !this.estado.usuario && vista !== 'auth') {
+            this.estado.vistaDespuesDeAuth = vista;
+            vista = 'auth';
+            params = {};
+        }
         this.estado.vista = vista;
 
         // Actualizar nav activo
@@ -160,6 +171,10 @@ const App = {
     },
 
     _actualizarCuentaSupabase() {
+        document.body.classList.toggle(
+            'auth-required',
+            Boolean(this.supabaseClient && !this.estado.usuario)
+        );
         const account = document.getElementById('supabase-account');
         const button = document.getElementById('btn-auth-action');
         if (!account || !button) return;
@@ -192,10 +207,9 @@ const App = {
         main.innerHTML = `
             <div class="auth-wrap page-enter">
                 <div class="config-card auth-card">
-                    <button class="btn btn--ghost" id="btn-auth-volver">‹ Volver a la biblioteca</button>
                     <div>
                         <h1 class="page-title">Cuenta Biblioluch</h1>
-                        <p class="page-subtitle">Inicia sesión para guardar y administrar tus libros privados.</p>
+                        <p class="page-subtitle">Inicia sesión para entrar a Biblioluch y acceder a tus libros privados.</p>
                     </div>
                     ${configurado ? `
                         <form id="auth-form" class="auth-form">
@@ -220,7 +234,6 @@ const App = {
                 </div>
             </div>
         `;
-        document.getElementById('btn-auth-volver')?.addEventListener('click', () => this.navegarA('biblioteca'));
         document.getElementById('auth-form')?.addEventListener('submit', async event => {
             event.preventDefault();
             const submitter = event.submitter;
@@ -235,7 +248,13 @@ const App = {
 
             try {
                 if (mode === 'signup') {
-                    const { data, error } = await this.supabaseClient.auth.signUp({ email, password });
+                    const { data, error } = await this.supabaseClient.auth.signUp({
+                        email,
+                        password,
+                        options: {
+                            emailRedirectTo: window.location.origin
+                        }
+                    });
                     if (error) throw error;
                     if (data.session) {
                         this.estado.usuario = data.session.user;
