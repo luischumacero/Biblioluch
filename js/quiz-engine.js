@@ -71,6 +71,190 @@ class QuizEngine {
         return preguntas.filter(p => p !== null);
     }
 
+    generarQuizLectura(fragmentos, config, titulos = []) {
+        const validos = fragmentos.filter(fragmento =>
+            fragmento.contenido && fragmento.contenido.replace(/\s+/g, ' ').trim().length > 80
+        );
+        if (validos.length < 2) {
+            throw new Error('No se pudo extraer suficiente texto del libro para generar preguntas. Comprueba que el PDF tenga texto seleccionable.');
+        }
+
+        const titulosDetectados = [...new Set([
+            ...titulos,
+            ...validos.map(fragmento => fragmento.titulo).filter(Boolean)
+        ])];
+        const tiposSolicitados = [...new Set(config.tipos)]
+            .filter(tipo => ['comprension', 'verdadero-falso', 'completar', 'titulos'].includes(tipo));
+        const tiposDisponibles = tiposSolicitados.filter(tipo => tipo !== 'titulos' || titulosDetectados.length > 1);
+        const tipos = tiposDisponibles.length ? tiposDisponibles : ['comprension'];
+        const cantidad = Math.min(config.cantidad, validos.length);
+        const plan = [];
+
+        while (plan.length < cantidad) {
+            plan.push(...this._mezclar(tipos));
+        }
+        plan.length = cantidad;
+
+        const pendientes = this._aleatorio(validos, validos.length);
+        const preguntas = [];
+        for (const tipo of plan) {
+            let indice = tipo === 'titulos'
+                ? pendientes.findIndex(fragmento => fragmento.titulo && titulosDetectados.includes(fragmento.titulo))
+                : -1;
+            if (indice < 0) indice = 0;
+            const [fragmento] = pendientes.splice(indice, 1);
+            let pregunta;
+
+            if (tipo === 'titulos' && fragmento.titulo && titulosDetectados.length > 1) {
+                pregunta = this._preguntaTitulo(fragmento, titulosDetectados);
+            } else if (tipo === 'verdadero-falso') {
+                pregunta = this._preguntaLecturaVF(fragmento, validos);
+            } else if (tipo === 'completar') {
+                pregunta = this._preguntaLecturaCompletar(fragmento, validos);
+            } else {
+                pregunta = this._preguntaComprension(fragmento, validos);
+            }
+            preguntas.push(pregunta);
+        }
+        return preguntas;
+    }
+
+    _preguntaComprension(fragmento, todos) {
+        const textoCorrecto = this._fraseClave(fragmento.contenido);
+        const correcta = this._htmlSeguro(textoCorrecto);
+        const distractores = this._aleatorio([...new Set(
+            todos
+                .filter(item => item.numero !== fragmento.numero)
+                .map(item => this._fraseClave(item.contenido))
+                .filter(texto => texto && texto !== textoCorrecto)
+        )], 3).map(item => this._htmlSeguro(item));
+        const opciones = this._mezclar([correcta, ...distractores]);
+        const preguntas = [
+            'Según el fragmento, ¿qué idea se expresa?',
+            '¿Cuál afirmación está respaldada por el texto mostrado?',
+            '¿Qué se puede concluir a partir de este pasaje?',
+            '¿Qué idea resume mejor la información del fragmento?'
+        ];
+        return {
+            id: this._uid(),
+            tipo: 'comprension',
+            tipoLabel: 'Comprensión de ideas',
+            tipoColor: '#3b82f6',
+            pregunta: preguntas[Math.floor(Math.random() * preguntas.length)],
+            fragmento: this._htmlSeguro(this._recortarFragmento(fragmento.contenido)),
+            opciones,
+            respuestaCorrecta: correcta,
+            contexto: this._contextoLectura(fragmento),
+            explicacion: `La opción correcta aparece en el fragmento mostrado:\n\n"${this._htmlSeguro(fragmento.contenido)}"`,
+            contenidoCompleto: fragmento.contenido
+        };
+    }
+
+    _preguntaTitulo(fragmento, titulos) {
+        const correcta = this._htmlSeguro(fragmento.titulo);
+        const distractores = this._aleatorio(
+            titulos.filter(titulo => titulo !== fragmento.titulo),
+            Math.min(3, titulos.length - 1)
+        ).map(titulo => this._htmlSeguro(titulo));
+        const opciones = this._mezclar([correcta, ...distractores]);
+        return {
+            id: this._uid(),
+            tipo: 'titulos',
+            tipoLabel: 'Relacionar con el título',
+            tipoColor: '#8b5cf6',
+            pregunta: '¿Qué título o encabezado corresponde al fragmento?',
+            fragmento: this._htmlSeguro(this._recortarFragmento(fragmento.contenido)),
+            opciones,
+            respuestaCorrecta: correcta,
+            contexto: 'Identifica el apartado por su contenido',
+            explicacion: `El encabezado detectado antes de este texto es "${correcta}".\n\nFragmento:\n"${this._htmlSeguro(fragmento.contenido)}"`,
+            contenidoCompleto: fragmento.contenido
+        };
+    }
+
+    _preguntaLecturaVF(fragmento, todos) {
+        const esVerdadero = Math.random() < 0.5;
+        const otro = this._aleatorio(
+            todos.filter(item => item.numero !== fragmento.numero),
+            1
+        )[0];
+        if (!otro) return this._preguntaComprension(fragmento, todos);
+        const afirmacion = this._htmlSeguro(esVerdadero
+            ? this._fraseClave(fragmento.contenido)
+            : this._fraseClave(otro.contenido));
+        return {
+            id: this._uid(),
+            tipo: 'verdadero-falso',
+            tipoLabel: 'Verdadero o Falso',
+            tipoColor: '#f59e0b',
+            pregunta: '¿Esta afirmación se puede comprobar en el fragmento mostrado?',
+            fragmento: this._htmlSeguro(this._recortarFragmento(fragmento.contenido)),
+            enunciado: `“${afirmacion}”`,
+            opciones: this._mezclar(['Verdadero', 'Falso']),
+            respuestaCorrecta: esVerdadero ? 'Verdadero' : 'Falso',
+            contexto: this._contextoLectura(fragmento),
+            explicacion: `El fragmento analizado dice:\n\n"${this._htmlSeguro(fragmento.contenido)}"`,
+            contenidoCompleto: fragmento.contenido
+        };
+    }
+
+    _preguntaLecturaCompletar(fragmento, todos) {
+        const palabras = fragmento.contenido.match(/\b[\p{L}]{5,}\b/gu) || [];
+        const palabra = palabras[Math.floor(palabras.length / 2)];
+        if (!palabra) return this._preguntaComprension(fragmento, todos);
+
+        const escaped = palabra.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const textoConEspacio = this._htmlSeguro(fragmento.contenido)
+            .replace(new RegExp(`(^|[^\\p{L}])(${escaped})(?=$|[^\\p{L}])`, 'iu'), '$1________');
+        const distractores = todos
+            .filter(item => item.numero !== fragmento.numero)
+            .flatMap(item => item.contenido.match(/\b[\p{L}]{5,}\b/gu) || [])
+            .filter(item => item.toLowerCase() !== palabra.toLowerCase());
+        const opciones = this._mezclar([
+            this._htmlSeguro(palabra),
+            ...this._aleatorio([...new Set(distractores)], Math.min(3, new Set(distractores).size)).map(item => this._htmlSeguro(item))
+        ]);
+        return {
+            id: this._uid(),
+            tipo: 'completar',
+            tipoLabel: 'Completar el texto',
+            tipoColor: '#22c55e',
+            pregunta: 'Completa la palabra que falta en el fragmento:',
+            enunciado: textoConEspacio,
+            opciones,
+            respuestaCorrecta: palabra,
+            contexto: this._contextoLectura(fragmento),
+            explicacion: `La palabra correcta es "${this._htmlSeguro(palabra)}".\n\nFragmento completo:\n"${this._htmlSeguro(fragmento.contenido)}"`,
+            contenidoCompleto: fragmento.contenido
+        };
+    }
+
+    _fraseClave(texto) {
+        const frases = texto
+            .replace(/\s+/g, ' ')
+            .match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [texto];
+        const frase = frases
+            .map(item => item.trim())
+            .filter(item => item.length >= 35)
+            .sort((a, b) => b.length - a.length)[0] || texto.trim();
+        return this._resumir(frase, 210);
+    }
+
+    _recortarFragmento(texto, max = 440) {
+        const limpio = texto.replace(/\s+/g, ' ').trim();
+        if (limpio.length <= max) return limpio;
+        const cortado = limpio.slice(0, max);
+        const ultimoEspacio = cortado.lastIndexOf(' ');
+        return `${cortado.slice(0, ultimoEspacio > max * 0.7 ? ultimoEspacio : max)}…`;
+    }
+
+    _contextoLectura(fragmento) {
+        const titulo = fragmento.titulo ? this._htmlSeguro(fragmento.titulo) : '';
+        return titulo
+            ? `Apartado: ${titulo} · Fragmento ${fragmento.numero}`
+            : `Fragmento ${fragmento.numero}`;
+    }
+
     // ─────────────────────────────────────────────
     //  GENERADORES DE TIPOS DE PREGUNTA
     // ─────────────────────────────────────────────
@@ -299,5 +483,9 @@ class QuizEngine {
 
     _uid() {
         return Date.now().toString(36) + Math.random().toString(36).substring(2);
+    }
+
+    _htmlSeguro(texto) {
+        return String(texto).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 }

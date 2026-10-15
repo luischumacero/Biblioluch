@@ -23,21 +23,23 @@ class PDFParser {
      * @returns {Object} Estructura jerárquica del PDF
      */
     async cargarYParsear(url, onProgreso = () => {}) {
-        const claveCache = 'bibliolex_v2_' + url.replace(/[^a-z0-9]/gi, '_');
+        const claveCache = 'bibliolex_v4_' + url.replace(/[^a-z0-9]/gi, '_');
+        const cacheable = !/\/LIBROS(?:%20| )PDF\//i.test(url);
 
-        // Intentar leer desde caché
-        try {
-            const cached = localStorage.getItem(claveCache);
-            if (cached) {
-                const data = JSON.parse(cached);
-                // Verificar que tiene artículos
-                if (data.articulos && data.articulos.length > 0) {
-                    onProgreso(100, `Cargado desde caché (${data.articulos.length} artículos)`);
-                    return data;
+        // Intentar leer desde caché solo para las leyes incluidas en la aplicación.
+        if (cacheable) {
+            try {
+                const cached = localStorage.getItem(claveCache);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    if (data.articulos && data.fragmentos && (data.articulos.length > 0 || data.fragmentos.length > 0)) {
+                        onProgreso(100, `Cargado desde caché (${data.articulos.length} artículos)`);
+                        return data;
+                    }
                 }
+            } catch (e) {
+                localStorage.removeItem(claveCache);
             }
-        } catch (e) {
-            localStorage.removeItem(claveCache);
         }
 
         // Cargar PDF con PDF.js
@@ -72,21 +74,104 @@ class PDFParser {
 
         // Parsear estructura
         const estructura = this.parsearEstructura(textoCompleto);
+        const analisisLectura = this.analizarTextoLectura(textoCompleto);
+        estructura.fragmentos = analisisLectura.fragmentos;
+        estructura.titulosLectura = analisisLectura.titulos;
         estructura.totalPaginas = totalPaginas;
 
         onProgreso(95, `Encontrados ${estructura.articulos.length} artículos`);
 
         // Guardar en caché (manejo de cuota)
         try {
-            localStorage.setItem(claveCache, JSON.stringify(estructura));
+            if (cacheable) localStorage.setItem(claveCache, JSON.stringify(estructura));
         } catch (e) {
             // Si la cuota se excede, limpiar ítems viejos
-            this._limpiarCache();
-            try { localStorage.setItem(claveCache, JSON.stringify(estructura)); } catch (_) {}
+            if (cacheable) {
+                this._limpiarCache();
+                try { localStorage.setItem(claveCache, JSON.stringify(estructura)); } catch (_) {}
+            }
         }
 
         onProgreso(100, '¡Análisis completado!');
         return estructura;
+    }
+
+    analizarTextoLectura(texto) {
+        const lineas = texto
+            .split(/\n|--- SALTO DE PAGINA ---/)
+            .map(linea => linea.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+        const frecuenciaLineas = new Map();
+        for (const linea of lineas) {
+            const clave = linea.toLocaleLowerCase();
+            frecuenciaLineas.set(clave, (frecuenciaLineas.get(clave) || 0) + 1);
+        }
+
+        const fragmentos = [];
+        const titulos = [];
+        const titulosVistos = new Set();
+        let tituloActual = '';
+        let buffer = [];
+        let longitudBuffer = 0;
+        const longitudObjetivo = 430;
+
+        const guardarFragmento = () => {
+            const contenido = buffer.join(' ').replace(/\s+/g, ' ').trim();
+            if (contenido.length >= 90) {
+                fragmentos.push({
+                    numero: fragmentos.length + 1,
+                    contenido,
+                    titulo: tituloActual || null
+                });
+            }
+            buffer = [];
+            longitudBuffer = 0;
+        };
+
+        for (const linea of lineas) {
+            if (/^\d{1,4}$/.test(linea)) continue;
+            const clave = linea.toLocaleLowerCase();
+            const veces = frecuenciaLineas.get(clave) || 0;
+            if (veces > 2 && this._pareceTituloLectura(linea)) continue;
+
+            if (this._pareceTituloLectura(linea)) {
+                guardarFragmento();
+                tituloActual = linea;
+                if (!titulosVistos.has(clave)) {
+                    titulosVistos.add(clave);
+                    titulos.push(linea);
+                }
+                continue;
+            }
+
+            const oraciones = linea.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [linea];
+            for (const oracion of oraciones) {
+                const parte = oracion.trim();
+                if (!parte) continue;
+                if (longitudBuffer && longitudBuffer + parte.length > longitudObjetivo) {
+                    guardarFragmento();
+                }
+                buffer.push(parte);
+                longitudBuffer += parte.length + 1;
+            }
+        }
+        guardarFragmento();
+
+        return { fragmentos, titulos };
+    }
+
+    _pareceTituloLectura(linea) {
+        if (linea.length < 4 || linea.length > 110 || /[.!?;]$/.test(linea)) return false;
+        if (/^(?:CAP[IÍ]TULO|T[IÍ]TULO|SECCI[ÓO]N|PARTE|LIBRO|INTRODUCCI[ÓO]N|CONCLUSI[ÓO]N|PR[ÓO]LOGO|EP[IÍ]LOGO|PREFACIO|ANEXO|AP[EÉ]NDICE|BIBLIOGRAF[IÍ]A)\b/i.test(linea)) return true;
+        if (!/[A-ZÁÉÍÓÚÑ]/.test(linea)) return false;
+
+        const letras = linea.match(/\p{L}/gu) || [];
+        const mayusculas = linea.match(/[A-ZÁÉÍÓÚÑ]/g) || [];
+        const palabras = linea.split(/\s+/);
+        return letras.length >= 4 &&
+            mayusculas.length / letras.length > 0.72 &&
+            palabras.length <= 14 &&
+            !/^(?:ART[IÍ]CULO|ART\.)\s*\d+/i.test(linea);
     }
 
     /**
@@ -363,7 +448,7 @@ class PDFParser {
 
     /** Borra el caché de un PDF específico (para forzar re-parseo) */
     limpiarCachePDF(url) {
-        const clave = 'bibliolex_v2_' + url.replace(/[^a-z0-9]/gi, '_');
+        const clave = 'bibliolex_v4_' + url.replace(/[^a-z0-9]/gi, '_');
         localStorage.removeItem(clave);
     }
 }

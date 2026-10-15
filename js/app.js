@@ -16,9 +16,15 @@ const App = {
         respuestas: [],          // { respuesta, correcta, pregunta }
         respondidaActual: false,
         cargando: false,
+        librosPDF: [],
+        usuario: null,
+        vistaDespuesDeAuth: 'libros-pdf',
         favoritos: JSON.parse(localStorage.getItem('bibliolex_favs') || '{}'),
         estadisticas: JSON.parse(localStorage.getItem('bibliolex_stats') || '{}')
     },
+
+    supabaseClient: null,
+    supabaseConfig: null,
 
     toggleFavorito(leyId, artNumero, variante) {
         if (!this.estado.favoritos) this.estado.favoritos = {};
@@ -38,11 +44,38 @@ const App = {
     engine: null,
 
     // ─── Inicialización ───────────────────────────────────────
-    init() {
+    async init() {
         this.parser = new PDFParser();
         this.engine = new QuizEngine();
         this._attachSidebarEvents();
+        await this._inicializarSupabase();
         this.navegarA('biblioteca');
+    },
+
+    async _inicializarSupabase() {
+        const config = window.BIBLIOLUCH_SUPABASE_CONFIG;
+        if (!config || !/^https:\/\/[^/]+\.supabase\.co$/i.test(config.url) ||
+            !config.anonKey || config.anonKey === 'TU_CLAVE_PUBLICA_ANON') {
+            return;
+        }
+        if (!window.supabase?.createClient) {
+            throw new Error('No se pudo cargar Supabase JS. Revisa tu conexión a internet e inténtalo de nuevo.');
+        }
+
+        this.supabaseConfig = config;
+        this.supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+        const { data, error } = await this.supabaseClient.auth.getSession();
+        if (error) throw new Error(`No se pudo recuperar la sesión de Supabase: ${error.message}`);
+        this.estado.usuario = data.session?.user || null;
+
+        this.supabaseClient.auth.onAuthStateChange((_event, session) => {
+            this.estado.usuario = session?.user || null;
+            this._actualizarCuentaSupabase();
+            if (!this.estado.usuario && this.estado.vista === 'libros-pdf') {
+                this._mostrarAutenticacion('libros-pdf');
+            }
+        });
+        this._actualizarCuentaSupabase();
     },
 
     _attachSidebarEvents() {
@@ -52,7 +85,21 @@ const App = {
                 const destino = el.dataset.nav;
                 if (destino === 'biblioteca') this.navegarA('biblioteca');
                 if (destino === 'quiz-config') this.navegarA('quiz-config');
+                if (destino === 'libros-pdf') this.navegarA('libros-pdf');
             });
+        });
+
+        document.getElementById('btn-importar-libro')?.addEventListener('click', () => {
+            this._abrirSelectorImportacion();
+        });
+        document.getElementById('input-libro-pdf')?.addEventListener('change', async event => {
+            const archivo = event.target.files?.[0];
+            event.target.value = '';
+            if (archivo) await this._importarLibroPDF(archivo);
+        });
+        document.getElementById('btn-auth-action')?.addEventListener('click', async () => {
+            if (this.estado.usuario) await this._cerrarSesion();
+            else this._mostrarAutenticacion('libros-pdf');
         });
 
         // Theme initialization
@@ -103,11 +150,126 @@ const App = {
         // Renderizar la vista correspondiente
         switch (vista) {
             case 'biblioteca':    this._renderBiblioteca(); break;
+            case 'libros-pdf':    this._renderLibrosPDF(); break;
+            case 'auth':          this._renderAutenticacion(); break;
             case 'lector':        this._renderLector(params.leyId); break;
             case 'quiz-config':   this._renderQuizConfig(params.leyId); break;
             case 'quiz':          this._renderQuiz(); break;
             case 'resultados':    this._renderResultados(); break;
         }
+    },
+
+    _actualizarCuentaSupabase() {
+        const account = document.getElementById('supabase-account');
+        const button = document.getElementById('btn-auth-action');
+        if (!account || !button) return;
+        if (!this.supabaseConfig) {
+            account.textContent = '';
+            button.hidden = true;
+            return;
+        }
+        account.textContent = this.estado.usuario?.email || '';
+        button.hidden = false;
+        button.textContent = this.estado.usuario ? 'Cerrar sesión' : 'Iniciar sesión';
+    },
+
+    _abrirSelectorImportacion() {
+        if (this.supabaseConfig && !this.estado.usuario) {
+            this._mostrarAutenticacion('libros-pdf');
+            return;
+        }
+        document.getElementById('input-libro-pdf')?.click();
+    },
+
+    _mostrarAutenticacion(vistaDestino = 'libros-pdf') {
+        this.estado.vistaDespuesDeAuth = vistaDestino;
+        this.navegarA('auth');
+    },
+
+    _renderAutenticacion() {
+        const main = document.getElementById('main-content');
+        const configurado = Boolean(this.supabaseClient);
+        main.innerHTML = `
+            <div class="auth-wrap page-enter">
+                <div class="config-card auth-card">
+                    <button class="btn btn--ghost" id="btn-auth-volver">‹ Volver a la biblioteca</button>
+                    <div>
+                        <h1 class="page-title">Cuenta Biblioluch</h1>
+                        <p class="page-subtitle">Inicia sesión para guardar y administrar tus libros privados.</p>
+                    </div>
+                    ${configurado ? `
+                        <form id="auth-form" class="auth-form">
+                            <label class="libro-renombrar">Correo electrónico
+                                <input class="input-num" type="email" name="email" autocomplete="email" required>
+                            </label>
+                            <label class="libro-renombrar">Contraseña
+                                <input class="input-num" type="password" name="password" autocomplete="current-password" minlength="6" required>
+                            </label>
+                            <div class="auth-actions">
+                                <button class="btn btn--gold" type="submit" data-auth-mode="login">Iniciar sesión</button>
+                                <button class="btn btn--outline" type="submit" data-auth-mode="signup">Crear cuenta</button>
+                            </div>
+                            <p id="auth-message" class="auth-message" role="status"></p>
+                        </form>
+                    ` : `
+                        <div class="auth-setup-note">
+                            <strong>Falta configurar Supabase.</strong>
+                            <p>Completa <code>js/supabase-config.js</code> y ejecuta <code>supabase/setup.sql</code> en el editor SQL de tu proyecto.</p>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+        document.getElementById('btn-auth-volver')?.addEventListener('click', () => this.navegarA('biblioteca'));
+        document.getElementById('auth-form')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const submitter = event.submitter;
+            const mode = submitter?.dataset.authMode;
+            const formData = new FormData(event.currentTarget);
+            const email = String(formData.get('email') || '').trim();
+            const password = String(formData.get('password') || '');
+            const message = document.getElementById('auth-message');
+            const buttons = event.currentTarget.querySelectorAll('button[type="submit"]');
+            buttons.forEach(button => { button.disabled = true; });
+            if (message) message.textContent = '';
+
+            try {
+                if (mode === 'signup') {
+                    const { data, error } = await this.supabaseClient.auth.signUp({ email, password });
+                    if (error) throw error;
+                    if (data.session) {
+                        this.estado.usuario = data.session.user;
+                        this._actualizarCuentaSupabase();
+                        this.navegarA(this.estado.vistaDespuesDeAuth);
+                    } else if (message) {
+                        message.textContent = 'Cuenta creada. Revisa tu correo para confirmar la dirección y luego inicia sesión.';
+                    }
+                } else {
+                    const { data, error } = await this.supabaseClient.auth.signInWithPassword({ email, password });
+                    if (error) throw error;
+                    this.estado.usuario = data.user;
+                    this._actualizarCuentaSupabase();
+                    this.navegarA(this.estado.vistaDespuesDeAuth);
+                }
+            } catch (error) {
+                if (message) message.textContent = error.message || 'No se pudo completar la autenticación.';
+            } finally {
+                buttons.forEach(button => { button.disabled = false; });
+            }
+        });
+    },
+
+    async _cerrarSesion() {
+        if (!this.supabaseClient) return;
+        const { error } = await this.supabaseClient.auth.signOut();
+        if (error) {
+            alert(`No se pudo cerrar la sesión: ${error.message}`);
+            return;
+        }
+        this.estado.usuario = null;
+        this.estado.librosPDF = [];
+        this._actualizarCuentaSupabase();
+        this.navegarA('biblioteca');
     },
 
     // ─────────────────────────────────────────────────────────
@@ -159,6 +321,312 @@ const App = {
         document.getElementById('inp-buscar')?.addEventListener('input', (e) => {
             this._filtrarLeyes(e.target.value.toLowerCase());
         });
+    },
+
+    async _cargarLibrosPDF() {
+        if (this.supabaseClient) {
+            if (!this.estado.usuario) throw new Error('Inicia sesión para ver tus libros privados.');
+            const table = this.supabaseConfig.table;
+            const { data, error } = await this.supabaseClient
+                .from(table)
+                .select('id,nombre,storage_path,is_shared,created_at')
+                .eq('user_id', this.estado.usuario.id)
+                .order('created_at', { ascending: false });
+            if (error) throw new Error(`No se pudieron cargar los libros: ${error.message}`);
+
+            const books = await Promise.all(data.map(async book => {
+                const { data: signed, error: signedError } = await this.supabaseClient
+                    .storage
+                    .from(this.supabaseConfig.bucket)
+                    .createSignedUrl(book.storage_path, 86400);
+                if (signedError) throw new Error(`No se pudo preparar “${book.nombre}” para abrirlo: ${signedError.message}`);
+                return {
+                    id: book.id,
+                    filename: book.storage_path,
+                    name: book.nombre,
+                    url: signed.signedUrl,
+                    is_shared: book.is_shared
+                };
+            }));
+            this.estado.librosPDF = books;
+            return books;
+        }
+
+        const response = await fetch('/api/books');
+        const data = await this._leerRespuestaJSON(response, 'cargar los libros');
+        if (!Array.isArray(data)) throw new Error('El servidor devolvió una lista de libros con formato no válido.');
+        this.estado.librosPDF = data;
+        return data;
+    },
+
+    async _leerRespuestaJSON(response, accion) {
+        const texto = await response.text();
+        let data;
+        if (texto.trim()) {
+            try {
+                data = JSON.parse(texto);
+            } catch (_) {
+                const estado = `HTTP ${response.status}`;
+                const hostingLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+                const indicacion = hostingLocal
+                    ? 'Asegúrate de iniciar la aplicación con start.bat.'
+                    : 'Configura Supabase en js/supabase-config.js y aplica supabase/setup.sql.';
+                throw new Error(`No se pudo ${accion}: el servidor respondió con un formato inesperado (${estado}). ${indicacion}`);
+            }
+        } else {
+            if (response.status === 405) {
+                const hostingLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+                const indicacion = hostingLocal
+                    ? 'Abre start.bat; la aplicación abrirá una dirección de puerto disponible.'
+                    : 'Configura Supabase en js/supabase-config.js para importar desde la web publicada.';
+                throw new Error(`El servidor que atiende esta página no admite la importación (HTTP 405). ${indicacion}`);
+            }
+            throw new Error(`No se pudo ${accion}: el servidor respondió vacío (HTTP ${response.status}). Cierra cualquier servidor anterior y vuelve a iniciar la aplicación con start.bat.`);
+        }
+        if (!response.ok) throw new Error(data.error || `No se pudo ${accion} (HTTP ${response.status}).`);
+        return data;
+    },
+
+    async _importarLibroPDF(archivo) {
+        if (archivo.type !== 'application/pdf' && !archivo.name.toLowerCase().endsWith('.pdf')) {
+            alert('Selecciona un archivo PDF.');
+            return;
+        }
+        const nombreSugerido = archivo.name.replace(/\.pdf$/i, '');
+        const nombre = prompt('¿Con qué nombre quieres guardar este libro?', nombreSugerido);
+        if (nombre === null) return;
+        if (!nombre.trim()) {
+            alert('Escribe un nombre para el libro.');
+            return;
+        }
+        if (this.supabaseClient && archivo.size > 50 * 1024 * 1024) {
+            alert('El PDF supera el límite actual de 50 MB del almacenamiento Supabase.');
+            return;
+        }
+
+        const boton = document.getElementById('btn-importar-libro');
+        if (boton) {
+            boton.disabled = true;
+            boton.dataset.textoOriginal = boton.textContent;
+            boton.textContent = 'Importando...';
+        }
+        try {
+            if (this.supabaseClient) {
+                const user = this.estado.usuario;
+                if (!user) {
+                    this._mostrarAutenticacion('libros-pdf');
+                    return;
+                }
+                const storagePath = `${user.id}/${crypto.randomUUID()}.pdf`;
+                const { error: uploadError } = await this.supabaseClient
+                    .storage
+                    .from(this.supabaseConfig.bucket)
+                    .upload(storagePath, archivo, { contentType: 'application/pdf', upsert: false });
+                if (uploadError) throw new Error(`No se pudo subir el PDF: ${uploadError.message}`);
+
+                const { data, error: insertError } = await this.supabaseClient
+                    .from(this.supabaseConfig.table)
+                    .insert({
+                        user_id: user.id,
+                        nombre: nombre.trim(),
+                        storage_path: storagePath
+                    })
+                    .select('id,nombre,storage_path,is_shared')
+                    .single();
+                if (insertError) {
+                    const { error: cleanupError } = await this.supabaseClient
+                        .storage.from(this.supabaseConfig.bucket).remove([storagePath]);
+                    const cleanupMessage = cleanupError ? ` No se pudo limpiar el archivo subido: ${cleanupError.message}` : '';
+                    throw new Error(`No se pudo registrar el libro: ${insertError.message}.${cleanupMessage}`);
+                }
+                await this._cargarLibrosPDF();
+                alert(`“${data.nombre}” se guardó en tu biblioteca privada de Supabase.`);
+                this.navegarA('libros-pdf');
+                return;
+            }
+
+            const response = await fetch(`/api/books?name=${encodeURIComponent(nombre.trim())}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/pdf' },
+                body: archivo
+            });
+            const data = await this._leerRespuestaJSON(response, 'guardar el PDF');
+            await this._cargarLibrosPDF();
+            alert(`“${data.name}” se guardó en la carpeta LIBROS PDF.`);
+            this.navegarA('libros-pdf');
+        } catch (error) {
+            alert(error.message || 'No se pudo importar el PDF. Comprueba que el servidor esté iniciado.');
+        } finally {
+            if (boton) {
+                boton.disabled = false;
+                boton.textContent = '📥 Importar PDF';
+            }
+        }
+    },
+
+    async _renderLibrosPDF() {
+        if (this.supabaseClient && !this.estado.usuario) {
+            this._mostrarAutenticacion('libros-pdf');
+            return;
+        }
+        const main = document.getElementById('main-content');
+        main.innerHTML = `
+            <div class="page-enter libros-page">
+                <div class="page-header">
+                    <button class="btn btn--ghost" id="btn-back-libros">‹ Biblioteca</button>
+                    <div>
+                        <h1 class="page-title">LIBROS PDF</h1>
+                        <p class="page-subtitle">Tus libros de lectura, guardados para abrirlos y generar preguntas.</p>
+                    </div>
+                    <button type="button" class="btn btn--gold" id="btn-importar-libro-page">📥 Importar PDF</button>
+                </div>
+                <div id="libros-pdf-lista" class="leyes-grid">
+                    <p class="loading-inline"><span class="spinner-sm"></span> Cargando libros...</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('btn-back-libros')?.addEventListener('click', () => this.navegarA('biblioteca'));
+        document.getElementById('btn-importar-libro-page')?.addEventListener('click', () => {
+            this._abrirSelectorImportacion();
+        });
+        try {
+            const libros = await this._cargarLibrosPDF();
+            const lista = document.getElementById('libros-pdf-lista');
+            if (!lista) return;
+            if (libros.length === 0) {
+                lista.innerHTML = '<div class="libros-vacio">Aún no hay libros. Usa “Importar PDF” para agregar uno.</div>';
+                return;
+            }
+            lista.innerHTML = libros.map(libro => `
+                <article class="ley-card libro-card">
+                    <div class="ley-card__header libro-card__header">
+                        <span class="ley-card__icon">📘</span>
+                        <span class="ley-card__badge">Libro de lectura</span>
+                    </div>
+                    <div class="ley-card__body">
+                        <h2 class="ley-card__titulo">${this._escaparHTML(libro.name)}</h2>
+                        <label class="libro-renombrar">
+                            Nombre del libro
+                            <input class="input-num" type="text" value="${this._escaparHTML(libro.name)}" maxlength="100" data-book-name>
+                        </label>
+                    </div>
+                    <div class="ley-card__footer libro-card__footer">
+                        <button class="btn btn--outline btn-libro-leer" data-book-file="${encodeURIComponent(libro.filename)}">Abrir</button>
+                        <button class="btn btn--gold btn-libro-quiz" data-book-file="${encodeURIComponent(libro.filename)}">Generar preguntas</button>
+                        <button class="btn btn--ghost btn-libro-renombrar" data-book-file="${encodeURIComponent(libro.filename)}">Guardar nombre</button>
+                        <button class="btn btn--ghost btn-libro-eliminar" data-book-file="${encodeURIComponent(libro.filename)}">🗑️ Eliminar</button>
+                    </div>
+                </article>
+            `).join('');
+            lista.querySelectorAll('.btn-libro-leer').forEach(button => button.addEventListener('click', () => {
+                this.navegarA('lector', { leyId: this._idLibro(decodeURIComponent(button.dataset.bookFile)) });
+            }));
+            lista.querySelectorAll('.btn-libro-quiz').forEach(button => button.addEventListener('click', () => {
+                this.navegarA('quiz-config', { leyId: this._idLibro(decodeURIComponent(button.dataset.bookFile)) });
+            }));
+            lista.querySelectorAll('.btn-libro-renombrar').forEach(button => button.addEventListener('click', () => {
+                const filename = decodeURIComponent(button.dataset.bookFile);
+                const input = button.closest('.ley-card').querySelector('[data-book-name]');
+                this._renombrarLibro(filename, input.value);
+            }));
+            lista.querySelectorAll('.btn-libro-eliminar').forEach(button => button.addEventListener('click', () => {
+                const filename = decodeURIComponent(button.dataset.bookFile);
+                const libro = libros.find(item => item.filename === filename);
+                this._eliminarLibro(filename, libro?.name || filename);
+            }));
+        } catch (error) {
+            const lista = document.getElementById('libros-pdf-lista');
+            if (lista) lista.innerHTML = `<p class="config-error">No se pudieron cargar los libros: ${this._escaparHTML(error.message)}</p>`;
+        }
+    },
+
+    async _renombrarLibro(filename, name) {
+        if (!name.trim()) {
+            alert('Escribe un nombre para el libro.');
+            return;
+        }
+        try {
+            if (this.supabaseClient) {
+                const libro = this.estado.librosPDF.find(item => item.filename === filename);
+                if (!libro) throw new Error('No se encontró el libro en tu biblioteca.');
+                const { error } = await this.supabaseClient
+                    .from(this.supabaseConfig.table)
+                    .update({ nombre: name.trim() })
+                    .eq('id', libro.id)
+                    .eq('user_id', this.estado.usuario.id);
+                if (error) throw new Error(`No se pudo cambiar el nombre: ${error.message}`);
+                await this._renderLibrosPDF();
+                return;
+            }
+
+            const response = await fetch(`/api/books/${encodeURIComponent(filename)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim() })
+            });
+            const data = await this._leerRespuestaJSON(response, 'cambiar el nombre del libro');
+            await this._cargarLibrosPDF();
+            this._renderLibrosPDF();
+        } catch (error) {
+            alert(error.message || 'No se pudo cambiar el nombre del libro.');
+        }
+    },
+
+    async _eliminarLibro(filename, name) {
+        const destino = this.supabaseClient ? 'tu biblioteca privada de Supabase' : 'la carpeta LIBROS PDF';
+        if (!confirm(`¿Eliminar “${name}”? Esta acción borrará permanentemente el PDF de ${destino}.`)) return;
+        try {
+            if (this.supabaseClient) {
+                const libro = this.estado.librosPDF.find(item => item.filename === filename);
+                if (!libro) throw new Error('No se encontró el libro en tu biblioteca.');
+                const { error: rowError } = await this.supabaseClient
+                    .from(this.supabaseConfig.table)
+                    .delete()
+                    .eq('id', libro.id)
+                    .eq('user_id', this.estado.usuario.id);
+                if (rowError) throw new Error(`No se pudo eliminar el registro del libro: ${rowError.message}`);
+                this.estado.librosPDF = this.estado.librosPDF.filter(item => item.id !== libro.id);
+                const { error: fileError } = await this.supabaseClient
+                    .storage
+                    .from(this.supabaseConfig.bucket)
+                    .remove([filename]);
+                if (fileError) {
+                    throw new Error(`El libro se quitó de tu lista, pero no se pudo borrar el archivo almacenado: ${fileError.message}`);
+                }
+                await this._renderLibrosPDF();
+                return;
+            }
+
+            const response = await fetch(`/api/books/${encodeURIComponent(filename)}`, {
+                method: 'DELETE'
+            });
+            await this._leerRespuestaJSON(response, 'eliminar el libro');
+            this.estado.librosPDF = this.estado.librosPDF.filter(libro => libro.filename !== filename);
+            await this._renderLibrosPDF();
+        } catch (error) {
+            alert(error.message || 'No se pudo eliminar el libro.');
+        }
+    },
+
+    _idLibro(filename) {
+        return `libro:${encodeURIComponent(filename)}`;
+    },
+
+    _obtenerDocumento(id) {
+        const ley = LEYES_DATA.find(item => item.id === id);
+        if (ley) return ley;
+        if (!id?.startsWith('libro:')) return null;
+        const filename = decodeURIComponent(id.slice('libro:'.length));
+        const libro = this.estado.librosPDF.find(item => item.filename === filename);
+        if (!libro) return null;
+        return {
+            id,
+            titulo: libro.name,
+            subtitulo: 'Libro de lectura',
+            archivo: libro.url,
+            icono: '📘',
+            esLibro: true
+        };
     },
 
     _htmlCard(ley) {
@@ -215,7 +683,7 @@ const App = {
         let totalQuizzes = parseInt(localStorage.getItem('bibliolex_quizzes_count') || '0');
 
         LEYES_DATA.forEach(ley => {
-            const clave = 'bibliolex_v2_' + ley.archivo.replace(/[^a-z0-9]/gi, '_');
+            const clave = 'bibliolex_v4_' + ley.archivo.replace(/[^a-z0-9]/gi, '_');
             try {
                 const cached = localStorage.getItem(clave);
                 if (cached) {
@@ -235,7 +703,7 @@ const App = {
     //  VISTA: LECTOR DE PDF
     // ─────────────────────────────────────────────────────────
     _renderLector(leyId) {
-        const ley = LEYES_DATA.find(l => l.id === leyId);
+        const ley = this._obtenerDocumento(leyId);
         if (!ley) { this.navegarA('biblioteca'); return; }
 
         this.estado.leyActualId = leyId;
@@ -252,7 +720,7 @@ const App = {
                     </button>
                     <div class="lector-topbar__title">
                         <span class="lector-topbar__icon">${ley.icono}</span>
-                        <span>${ley.titulo}</span>
+                        <span>${this._escaparHTML(ley.titulo)}</span>
                     </div>
                     <button class="btn btn--gold" id="btn-quiz-desde-lector" data-ley-id="${leyId}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -286,11 +754,11 @@ const App = {
                             class="pdf-iframe"
                             data="${ley.archivo}#view=FitV"
                             type="application/pdf"
-                            title="${ley.titulo}"
+                            title="${this._escaparHTML(ley.titulo)}"
                         >
                             <div style="padding: 20px; text-align: center;">
                                 <p style="margin-bottom: 10px;">Tu celular requiere abrir el PDF en una pestaña nueva para verlo completo.</p>
-                                <a href="${ley.archivo}" target="_blank" class="btn btn--gold">Abrir PDF Completo</a>
+                                <a href="${ley.archivo}" target="_blank" rel="noopener" class="btn btn--gold">Abrir PDF Completo</a>
                             </div>
                         </object>
                     </div>
@@ -311,6 +779,7 @@ const App = {
         try {
             const estructura = await this.parser.cargarYParsear(ley.archivo);
             this.estado.estructura = estructura;
+            this.estado.leyActualId = ley.id;
             this._renderSidebarEstructura(estructura);
         } catch (e) {
             const sidebar = document.getElementById('sidebar-estructura');
@@ -326,6 +795,23 @@ const App = {
     _renderSidebarEstructura(est) {
         const sidebar = document.getElementById('sidebar-estructura');
         if (!sidebar) return;
+
+        if (this._obtenerDocumento(this.estado.leyActualId)?.esLibro) {
+            const total = est.fragmentos?.length || 0;
+            const titulos = est.titulosLectura || [];
+            sidebar.innerHTML = total
+                ? `<div class="tree-flat">
+                    <div class="tree-flat-header"><span class="tree-flat-count">${total} fragmentos de lectura</span></div>
+                    <p class="tree-flat-range">Se analizaron ideas y encabezados para crear preguntas basadas en el texto.</p>
+                    ${titulos.length ? `<details class="book-headings">
+                        <summary>Encabezados detectados (${titulos.length})</summary>
+                        <ul>${titulos.slice(0, 40).map(titulo => `<li>${this._escaparHTML(titulo)}</li>`).join('')}</ul>
+                        ${titulos.length > 40 ? `<small>Se muestran 40 de ${titulos.length} encabezados.</small>` : ''}
+                    </details>` : '<p class="tree-flat-range">No se detectaron encabezados; las preguntas usarán ideas y fragmentos.</p>'}
+                </div>`
+                : '<p class="no-structure">No se pudo extraer texto del PDF. Puede ser un documento escaneado.</p>';
+            return;
+        }
 
         // Fallbacks for old cached structures
         est.partes = est.partes || [];
@@ -504,6 +990,11 @@ const App = {
     //  VISTA: CONFIGURACIÓN DEL QUIZ
     // ─────────────────────────────────────────────────────────
     _renderQuizConfig(leyId = null) {
+        const documento = this._obtenerDocumento(leyId || this.estado.leyActualId);
+        if (documento?.esLibro) {
+            this._renderQuizConfigLibro(documento);
+            return;
+        }
         const main = document.getElementById('main-content');
 
         const leySelId = leyId || this.estado.leyActualId;
@@ -638,6 +1129,54 @@ const App = {
         if (leySelId) {
             this._preCargarEstructura(leySelId);
         }
+    },
+
+    _renderQuizConfigLibro(libro) {
+        const main = document.getElementById('main-content');
+        main.innerHTML = `
+            <div class="quiz-config-wrap page-enter">
+                <div class="page-header">
+                    <button class="btn btn--ghost" id="btn-back-config">‹ LIBROS PDF</button>
+                    <div>
+                        <h1 class="page-title">Preguntas de lectura</h1>
+                        <p class="page-subtitle">${this._escaparHTML(libro.titulo)}</p>
+                    </div>
+                </div>
+                <div class="config-card libro-quiz-config">
+                    <div class="config-card__header"><span class="config-step">1</span><h2>Configura tus preguntas</h2></div>
+                    <div class="opcion-grupo">
+                        <label class="opcion-label">Número de preguntas</label>
+                        <div class="cantidad-btns">
+                            <button class="cant-btn" data-cant="5">5</button>
+                            <button class="cant-btn cant-btn--active" data-cant="10">10</button>
+                            <button class="cant-btn" data-cant="15">15</button>
+                            <button class="cant-btn" data-cant="20">20</button>
+                        </div>
+                    </div>
+                    <div class="opcion-grupo">
+                        <label class="opcion-label">Tipos de pregunta</label>
+                        <div class="tipos-checks">
+                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="comprension" checked><span class="tipo-check__box" style="--color:#3b82f6"></span><span>Comprensión lectora</span></label>
+                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="titulos" checked><span class="tipo-check__box" style="--color:#8b5cf6"></span><span>Relacionar fragmento con su título</span></label>
+                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="verdadero-falso" checked><span class="tipo-check__box" style="--color:#f59e0b"></span><span>Verdadero o Falso</span></label>
+                            <label class="tipo-check"><input type="checkbox" name="tipo-pregunta" value="completar"><span class="tipo-check__box" style="--color:#22c55e"></span><span>Completar el texto</span></label>
+                        </div>
+                    </div>
+                    <button class="btn btn--gold btn--lg btn--full" id="btn-iniciar-quiz">Analizar libro y generar preguntas</button>
+                    <div id="config-error" class="config-error" style="display:none"></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('btn-back-config')?.addEventListener('click', () => this.navegarA('libros-pdf'));
+        let cantidad = 10;
+        document.querySelectorAll('.cant-btn').forEach(button => button.addEventListener('click', () => {
+            document.querySelectorAll('.cant-btn').forEach(item => item.classList.remove('cant-btn--active'));
+            button.classList.add('cant-btn--active');
+            cantidad = Number(button.dataset.cant);
+        }));
+        document.getElementById('btn-iniciar-quiz')?.addEventListener('click', async () => {
+            await this._iniciarQuiz(libro.id, 'lectura', cantidad);
+        });
     },
 
     _htmlRangoArticulos() {
@@ -805,16 +1344,22 @@ const App = {
             return;
         }
 
+        const documento = this._obtenerDocumento(leyId);
+        if (!documento) {
+            this._mostrarConfigError('No se encontró el documento seleccionado. Vuelve a abrirlo desde la biblioteca.');
+            return;
+        }
+
         // Obtener rango
         let rangoDesde, rangoHasta;
-        if (rangoTipo === 'articulos') {
+        if (!documento.esLibro && rangoTipo === 'articulos') {
             rangoDesde = parseInt(document.getElementById('art-desde')?.value) || 1;
             rangoHasta = parseInt(document.getElementById('art-hasta')?.value) || 50;
             if (rangoDesde > rangoHasta) {
                 this._mostrarConfigError('"Desde" no puede ser mayor que "Hasta".');
                 return;
             }
-        } else {
+        } else if (!documento.esLibro) {
             const select = document.getElementById('rango-select');
             rangoDesde = select?.value;
             rangoHasta = select?.value;
@@ -823,9 +1368,8 @@ const App = {
         // Mostrar carga si no tenemos estructura
         if (!this.estado.estructura || this.estado.leyActualId !== leyId) {
             this.mostrarCargando('Preparando quiz...');
-            const ley = LEYES_DATA.find(l => l.id === leyId);
             try {
-                const est = await this.parser.cargarYParsear(ley.archivo, (pct, msg) => {
+                const est = await this.parser.cargarYParsear(documento.archivo, (pct, msg) => {
                     this.actualizarCargando(pct, msg);
                 });
                 this.estado.estructura = est;
@@ -839,14 +1383,21 @@ const App = {
         }
 
         // Filtrar artículos
-        const articulos = this.parser.filtrarPorRango(
-            this.estado.estructura, rangoTipo, rangoDesde, rangoHasta
-        );
-
         // Generar preguntas
         let preguntas;
         try {
-            preguntas = this.engine.generarQuiz(articulos, { cantidad, tipos });
+            if (documento.esLibro) {
+                preguntas = this.engine.generarQuizLectura(
+                    this.estado.estructura.fragmentos || [],
+                    { cantidad, tipos },
+                    this.estado.estructura.titulosLectura || []
+                );
+            } else {
+                const articulos = this.parser.filtrarPorRango(
+                    this.estado.estructura, rangoTipo, rangoDesde, rangoHasta
+                );
+                preguntas = this.engine.generarQuiz(articulos, { cantidad, tipos });
+            }
         } catch (e) {
             this._mostrarConfigError(e.message);
             return;
@@ -893,7 +1444,7 @@ const App = {
         const pregunta = preguntas[preguntaIndex];
         const total = preguntas.length;
         const progresoPct = Math.round((preguntaIndex / total) * 100);
-        const ley = LEYES_DATA.find(l => l.id === this.estado.leyActualId);
+        const ley = this._obtenerDocumento(this.estado.leyActualId);
 
         const main = document.getElementById('main-content');
 
@@ -908,7 +1459,7 @@ const App = {
                         Salir
                     </button>
                     <div class="quiz-topbar__center">
-                        <span class="quiz-ley-badge">${ley?.icono || '⚖️'} ${ley?.titulo || ''}</span>
+                        <span class="quiz-ley-badge">${ley?.icono || '⚖️'} ${this._escaparHTML(ley?.titulo || '')}</span>
                     </div>
                     <div class="quiz-contador">
                         <span class="quiz-contador__num">${preguntaIndex + 1}</span>
@@ -926,7 +1477,7 @@ const App = {
                 <div class="quiz-content">
                     <div class="pregunta-card" id="pregunta-card">
                         <!-- Contexto / Breadcrumb -->
-                        ${pregunta.contexto ? `<div class="pregunta-contexto">${pregunta.contexto}</div>` : ''}
+                        ${pregunta.contexto ? `<div class="pregunta-contexto">${this._escaparHTML(pregunta.contexto)}</div>` : ''}
 
                         <!-- Tipo badge -->
                         <div class="pregunta-tipo-badge" style="background: ${pregunta.tipoColor}22; color: ${pregunta.tipoColor}; border-color: ${pregunta.tipoColor}44">
@@ -1030,7 +1581,11 @@ const App = {
     },
 
     _escapar(str) {
-        return str.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+
+    _escaparHTML(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     },
 
     // ─────────────────────────────────────────────────────────
@@ -1041,7 +1596,7 @@ const App = {
         const correctas = respuestas.filter(r => r.correcta).length;
         const total = preguntas.length;
         const pct = Math.round((correctas / total) * 100);
-        const ley = LEYES_DATA.find(l => l.id === this.estado.leyActualId);
+        const ley = this._obtenerDocumento(this.estado.leyActualId);
 
         let mensajeClase = '', mensajeTexto = '', mensajeEmoji = '';
         if (pct >= 90)      { mensajeClase = 'gold'; mensajeTexto = '¡Excelente dominio!'; mensajeEmoji = '🏆'; }
@@ -1072,7 +1627,7 @@ const App = {
                         <p class="resultado-sub">
                             <strong>${correctas}</strong> correctas de <strong>${total}</strong> preguntas
                         </p>
-                        <p class="resultado-ley">${ley?.icono || ''} ${ley?.titulo || ''}</p>
+                        <p class="resultado-ley">${ley?.icono || ''} ${this._escaparHTML(ley?.titulo || '')}</p>
                     </div>
                 </div>
 
@@ -1181,4 +1736,12 @@ const App = {
 };
 
 // Arranque
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', () => {
+    App.init().catch(error => {
+        console.error('No se pudo iniciar Biblioluch:', error);
+        const main = document.getElementById('main-content');
+        if (main) {
+            main.innerHTML = `<div class="auth-setup-note">No se pudo iniciar la aplicación: ${App._escaparHTML(error.message)}</div>`;
+        }
+    });
+});
