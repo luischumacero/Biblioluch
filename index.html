@@ -30,17 +30,15 @@
 <body>
 
     <div class="app-layout">
+        <header class="app-topbar">
+            <a class="app-topbar__brand" href="#" onclick="App.navegarA('biblioteca'); return false;" aria-label="Biblioluch, ir al inicio">
+                <img class="app-topbar__logo" src="logo.png" alt="Biblioluch">
+                <span class="app-topbar__name">Tu espacio para estudiar</span>
+            </a>
+        </header>
 
         <!-- ════════════════ SIDEBAR ════════════════ -->
         <aside class="sidebar" id="sidebar">
-
-            <div class="sidebar__brand">
-                <img class="sidebar__logo-wrap" src="logo.png" alt="Biblioluch">
-                <div class="sidebar__brand-text">
-                    <span class="sidebar__app-name">Biblioluch</span>
-                    <span class="sidebar__app-sub">Tu espacio para estudiar</span>
-                </div>
-            </div>
 
             <nav class="sidebar__nav" role="navigation" aria-label="Navegación principal">
                 <a href="#" class="sidebar__link active" onclick="App.navegarA('biblioteca')" role="button"
