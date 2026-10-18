@@ -259,6 +259,309 @@ revoke all on function public.join_community_group(text) from public;
 grant execute on function public.create_community_group(text, text) to authenticated;
 grant execute on function public.join_community_group(text) to authenticated;
 
+create table if not exists public.profiles (
+    user_id uuid primary key references auth.users(id) on delete cascade,
+    username text not null unique check (username ~ '^[a-z0-9_]{3,24}$'),
+    display_name text not null check (char_length(display_name) between 1 and 80),
+    bio text not null default '' check (char_length(bio) <= 240),
+    school text not null default '' check (char_length(school) <= 120),
+    avatar_path text,
+    updated_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+grant select, insert, update on public.profiles to authenticated;
+
+drop policy if exists "Authenticated users can view profiles" on public.profiles;
+create policy "Authenticated users can view profiles"
+    on public.profiles for select
+    to authenticated
+    using (true);
+
+drop policy if exists "Users can create their own profile" on public.profiles;
+create policy "Users can create their own profile"
+    on public.profiles for insert
+    to authenticated
+    with check (user_id = (select auth.uid()));
+
+drop policy if exists "Users can update their own profile" on public.profiles;
+create policy "Users can update their own profile"
+    on public.profiles for update
+    to authenticated
+    using (user_id = (select auth.uid()))
+    with check (user_id = (select auth.uid()));
+
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    clean_display_name text := trim(coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1), 'Estudiante'));
+    clean_username text := lower(regexp_replace(coalesce(new.raw_user_meta_data ->> 'username', ''), '[^a-z0-9_]', '', 'g'));
+begin
+    if char_length(clean_username) not between 3 and 24 then
+        clean_username := 'estudiante_' || left(replace(new.id::text, '-', ''), 10);
+    end if;
+    insert into public.profiles (user_id, username, display_name)
+    values (new.id, clean_username, left(coalesce(nullif(clean_display_name, ''), 'Estudiante'), 80))
+    on conflict (user_id) do nothing;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+create trigger on_auth_user_created_profile
+    after insert on auth.users
+    for each row execute function public.handle_new_user_profile();
+
+insert into public.profiles (user_id, username, display_name)
+select
+    account.id,
+    'estudiante_' || left(replace(account.id::text, '-', ''), 10),
+    left(coalesce(
+        nullif(trim(account.raw_user_meta_data ->> 'display_name'), ''),
+        nullif(split_part(coalesce(account.email, ''), '@', 1), ''),
+        'Estudiante'
+    ), 80)
+from auth.users as account
+on conflict (user_id) do nothing;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('profile-avatars', 'profile-avatars', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+set public = true,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Users can upload their profile avatar" on storage.objects;
+create policy "Users can upload their profile avatar"
+    on storage.objects for insert
+    to authenticated
+    with check (
+        bucket_id = 'profile-avatars'
+        and (storage.foldername(name))[1] = (select auth.uid())::text
+    );
+
+drop policy if exists "Users can update their profile avatar" on storage.objects;
+create policy "Users can update their profile avatar"
+    on storage.objects for update
+    to authenticated
+    using (
+        bucket_id = 'profile-avatars'
+        and (storage.foldername(name))[1] = (select auth.uid())::text
+    )
+    with check (
+        bucket_id = 'profile-avatars'
+        and (storage.foldername(name))[1] = (select auth.uid())::text
+    );
+
+drop policy if exists "Users can delete their profile avatar" on storage.objects;
+create policy "Users can delete their profile avatar"
+    on storage.objects for delete
+    to authenticated
+    using (
+        bucket_id = 'profile-avatars'
+        and (storage.foldername(name))[1] = (select auth.uid())::text
+    );
+
+create table if not exists public.conversations (
+    id uuid primary key default gen_random_uuid(),
+    title text not null check (char_length(title) between 1 and 80),
+    is_group boolean not null default false,
+    created_by uuid not null references auth.users(id) on delete cascade,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create table if not exists public.conversation_members (
+    conversation_id uuid not null references public.conversations(id) on delete cascade,
+    user_id uuid not null references auth.users(id) on delete cascade,
+    joined_at timestamptz not null default now(),
+    primary key (conversation_id, user_id)
+);
+
+create table if not exists public.messages (
+    id uuid primary key default gen_random_uuid(),
+    conversation_id uuid not null references public.conversations(id) on delete cascade,
+    sender_id uuid not null references auth.users(id) on delete cascade,
+    content text not null check (char_length(content) between 1 and 4000),
+    created_at timestamptz not null default now()
+);
+
+create index if not exists conversation_members_user_id_idx on public.conversation_members(user_id, conversation_id);
+create index if not exists messages_conversation_created_idx on public.messages(conversation_id, created_at);
+
+alter table public.conversations enable row level security;
+alter table public.conversation_members enable row level security;
+alter table public.messages enable row level security;
+
+grant select on public.conversations, public.conversation_members to authenticated;
+grant select, insert on public.messages to authenticated;
+
+create or replace function public.is_conversation_member(p_conversation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select exists (
+        select 1
+        from public.conversation_members
+        where conversation_id = p_conversation_id
+          and user_id = (select auth.uid())
+    );
+$$;
+
+revoke all on function public.is_conversation_member(uuid) from public;
+grant execute on function public.is_conversation_member(uuid) to authenticated;
+
+drop policy if exists "Members can read their conversations" on public.conversations;
+create policy "Members can read their conversations"
+    on public.conversations for select
+    to authenticated
+    using (public.is_conversation_member(id));
+
+drop policy if exists "Members can read conversation participants" on public.conversation_members;
+create policy "Members can read conversation participants"
+    on public.conversation_members for select
+    to authenticated
+    using (public.is_conversation_member(conversation_id));
+
+drop policy if exists "Members can read conversation messages" on public.messages;
+create policy "Members can read conversation messages"
+    on public.messages for select
+    to authenticated
+    using (public.is_conversation_member(conversation_id));
+
+drop policy if exists "Members can send conversation messages" on public.messages;
+create policy "Members can send conversation messages"
+    on public.messages for insert
+    to authenticated
+    with check (
+        sender_id = (select auth.uid())
+        and public.is_conversation_member(conversation_id)
+    );
+
+create or replace function public.touch_conversation_updated_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    update public.conversations
+    set updated_at = now()
+    where id = new.conversation_id;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_message_created_update_conversation on public.messages;
+create trigger on_message_created_update_conversation
+    after insert on public.messages
+    for each row execute function public.touch_conversation_updated_at();
+
+create or replace function public.create_conversation(p_participant_ids uuid[], p_title text, p_is_group boolean)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    new_conversation_id uuid;
+    participant_count integer;
+    profile_count integer;
+    clean_title text := trim(p_title);
+begin
+    if auth.uid() is null then
+        raise exception 'Inicia sesión para crear una conversación.';
+    end if;
+    if clean_title is null or char_length(clean_title) not between 1 and 80 then
+        raise exception 'El nombre debe tener entre 1 y 80 caracteres.';
+    end if;
+
+    select count(distinct participants.user_id)
+    into participant_count
+    from unnest(coalesce(p_participant_ids, '{}'::uuid[])) as participants(user_id)
+    where participants.user_id <> (select auth.uid());
+
+    if (p_is_group and participant_count < 2) or (not p_is_group and participant_count <> 1) then
+        raise exception 'La cantidad de participantes no es válida.';
+    end if;
+
+    select count(distinct profile.user_id)
+    into profile_count
+    from public.profiles as profile
+    where profile.user_id = any(coalesce(p_participant_ids, '{}'::uuid[]))
+      and profile.user_id <> (select auth.uid());
+    if profile_count <> participant_count then
+        raise exception 'Uno o más participantes no tienen un perfil válido.';
+    end if;
+
+    if not p_is_group then
+        select conversation.id
+        into new_conversation_id
+        from public.conversations as conversation
+        where conversation.is_group = false
+          and exists (
+              select 1 from public.conversation_members
+              where conversation_id = conversation.id
+                and user_id = (select auth.uid())
+          )
+          and exists (
+              select 1 from public.conversation_members
+              where conversation_id = conversation.id
+                and user_id = any(coalesce(p_participant_ids, '{}'::uuid[]))
+                and user_id <> (select auth.uid())
+          )
+          and (
+              select count(*)
+              from public.conversation_members
+              where conversation_id = conversation.id
+          ) = 2
+        limit 1;
+        if new_conversation_id is not null then
+            return new_conversation_id;
+        end if;
+    end if;
+
+    insert into public.conversations (title, is_group, created_by)
+    values (clean_title, p_is_group, (select auth.uid()))
+    returning id into new_conversation_id;
+
+    insert into public.conversation_members (conversation_id, user_id)
+    values (new_conversation_id, (select auth.uid()));
+
+    insert into public.conversation_members (conversation_id, user_id)
+    select new_conversation_id, participants.user_id
+    from unnest(coalesce(p_participant_ids, '{}'::uuid[])) as participants(user_id)
+    where participants.user_id <> (select auth.uid())
+    on conflict (conversation_id, user_id) do nothing;
+
+    return new_conversation_id;
+end;
+$$;
+
+revoke all on function public.create_conversation(uuid[], text, boolean) from public;
+grant execute on function public.create_conversation(uuid[], text, boolean) to authenticated;
+
+do $$
+begin
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+       and not exists (
+           select 1 from pg_publication_tables
+           where pubname = 'supabase_realtime'
+             and schemaname = 'public'
+             and tablename = 'messages'
+       ) then
+        alter publication supabase_realtime add table public.messages;
+    end if;
+end;
+$$;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('comunidad-pdf', 'comunidad-pdf', false, 52428800, array['application/pdf'])
 on conflict (id) do update

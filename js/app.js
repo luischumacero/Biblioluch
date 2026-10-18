@@ -20,6 +20,7 @@ const App = {
         librosComunidad: [],
         grupoComunidad: null,
         usuario: null,
+        passwordRecovery: false,
         vistaDespuesDeAuth: 'libros-pdf',
         favoritos: JSON.parse(localStorage.getItem('bibliolex_favs') || '{}'),
         estadisticas: JSON.parse(localStorage.getItem('bibliolex_stats') || '{}')
@@ -77,6 +78,11 @@ const App = {
         this.supabaseClient.auth.onAuthStateChange((event, session) => {
             this.estado.usuario = session?.user || null;
             this._actualizarCuentaSupabase();
+            if (event === 'PASSWORD_RECOVERY') {
+                this.estado.passwordRecovery = true;
+                this.navegarA('password-reset');
+                return;
+            }
             if (!this.estado.usuario && this.estado.vista !== 'auth') {
                 this._mostrarAutenticacion('biblioteca');
             } else if (this.estado.usuario && event === 'SIGNED_IN' && this.estado.vista === 'auth') {
@@ -113,16 +119,16 @@ const App = {
 
         // Theme initialization
         const savedTheme = localStorage.getItem('bibliolex_theme');
-        if (savedTheme === 'light') {
-            document.body.classList.add('theme-light');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('theme-dark');
             const btn = document.getElementById('btn-toggle-theme');
-            if (btn) btn.textContent = '🌙 Cambiar Tema';
+            if (btn) btn.textContent = '☀️ Modo claro';
         }
 
         document.getElementById('btn-toggle-theme')?.addEventListener('click', (e) => {
-            const isLight = document.body.classList.toggle('theme-light');
-            localStorage.setItem('bibliolex_theme', isLight ? 'light' : 'dark');
-            e.target.textContent = isLight ? '🌙 Cambiar Tema' : '☀️ Cambiar Tema';
+            const isDark = document.body.classList.toggle('theme-dark');
+            localStorage.setItem('bibliolex_theme', isDark ? 'dark' : 'light');
+            e.currentTarget.textContent = isDark ? '☀️ Modo claro' : '🌙 Modo oscuro';
         });
 
         // Toggle sidebar on mobile
@@ -167,6 +173,7 @@ const App = {
             case 'libros-pdf':    this._renderLibrosPDF(); break;
             case 'comunidad':    this._renderComunidad(params.groupId); break;
             case 'auth':          this._renderAutenticacion(); break;
+            case 'password-reset': this._renderRestablecerContrasena(); break;
             case 'lector':        this._renderLector(params.leyId); break;
             case 'quiz-config':   this._renderQuizConfig(params.leyId); break;
             case 'quiz':          this._renderQuiz(); break;
@@ -211,23 +218,32 @@ const App = {
         main.innerHTML = `
             <div class="auth-wrap page-enter">
                 <div class="config-card auth-card">
-                    <div>
-                        <h1 class="page-title">Cuenta Biblioluch</h1>
-                        <p class="page-subtitle">Inicia sesión para entrar a Biblioluch y acceder a tus libros privados.</p>
+                    <div class="auth-brand">
+                        <div class="auth-brand__logo" aria-hidden="true">⚖️</div>
+                        <p class="auth-brand__eyebrow">BIBLIOLUCH · FISCALÍA BOLIVIA</p>
+                        <h1 class="page-title">Tu espacio para estudiar</h1>
+                        <p class="page-subtitle">Ingresa a tu cuenta para continuar con tus libros, grupos y conversaciones.</p>
                     </div>
                     ${configurado ? `
                         <form id="auth-form" class="auth-form">
+                            <label class="libro-renombrar" id="auth-display-name-field" hidden>Nombre completo
+                                <input class="input-num" type="text" name="displayName" autocomplete="name" maxlength="80" placeholder="¿Cómo te llamas?">
+                            </label>
                             <label class="libro-renombrar">Correo electrónico
-                                <input class="input-num" type="email" name="email" autocomplete="email" required>
+                                <input class="input-num" type="email" name="email" autocomplete="email" required placeholder="tu@correo.com">
                             </label>
                             <label class="libro-renombrar">Contraseña
-                                <input class="input-num" type="password" name="password" autocomplete="current-password" minlength="6" required>
+                                <span class="auth-password">
+                                    <input class="input-num" id="auth-password" type="password" name="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo 6 caracteres">
+                                    <button class="auth-password__toggle" type="button" id="auth-password-toggle" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+                                </span>
                             </label>
-                            <div class="auth-actions">
-                                <button class="btn btn--gold" type="submit" data-auth-mode="login">Iniciar sesión</button>
-                                <button class="btn btn--outline" type="submit" data-auth-mode="signup">Crear cuenta</button>
-                            </div>
+                            <button class="auth-link auth-forgot" type="button" id="auth-forgot">¿Olvidaste tu contraseña?</button>
+                            <button class="btn btn--gold auth-submit" type="submit" id="auth-submit">Iniciar sesión</button>
                             <p id="auth-message" class="auth-message" role="status"></p>
+                            <p class="auth-switch"><span id="auth-switch-prompt">¿Aún no tienes cuenta?</span>
+                                <button class="auth-link" type="button" id="auth-mode-toggle">Crear una cuenta</button>
+                            </p>
                         </form>
                     ` : `
                         <div class="auth-setup-note">
@@ -238,17 +254,71 @@ const App = {
                 </div>
             </div>
         `;
-        document.getElementById('auth-form')?.addEventListener('submit', async event => {
+        const form = document.getElementById('auth-form');
+        if (!form) return;
+        let mode = 'login';
+        const passwordInput = document.getElementById('auth-password');
+        const displayNameInput = form.elements.namedItem('displayName');
+        const displayNameField = document.getElementById('auth-display-name-field');
+        const submitButton = document.getElementById('auth-submit');
+        const setMessage = (text, isError = false) => {
+            const message = document.getElementById('auth-message');
+            message.textContent = text;
+            message.classList.toggle('auth-message--error', isError);
+            message.classList.toggle('auth-message--success', Boolean(text) && !isError);
+        };
+        const updateMode = () => {
+            const signup = mode === 'signup';
+            displayNameField.hidden = !signup;
+            displayNameInput.required = signup;
+            passwordInput.autocomplete = signup ? 'new-password' : 'current-password';
+            submitButton.textContent = signup ? 'Crear mi cuenta' : 'Iniciar sesión';
+            document.getElementById('auth-mode-toggle').textContent = signup ? 'Iniciar sesión' : 'Crear una cuenta';
+            document.getElementById('auth-switch-prompt').textContent = signup ? '¿Ya tienes cuenta?' : '¿Aún no tienes cuenta?';
+            document.getElementById('auth-forgot').hidden = signup;
+            setMessage('');
+        };
+        document.getElementById('auth-mode-toggle').addEventListener('click', () => {
+            mode = mode === 'login' ? 'signup' : 'login';
+            updateMode();
+        });
+        document.getElementById('auth-password-toggle').addEventListener('click', event => {
+            const button = event.currentTarget;
+            const showing = passwordInput.type === 'password';
+            passwordInput.type = showing ? 'text' : 'password';
+            button.textContent = showing ? 'Ocultar' : 'Mostrar';
+            button.setAttribute('aria-label', showing ? 'Ocultar contraseña' : 'Mostrar contraseña');
+            button.setAttribute('aria-pressed', String(showing));
+        });
+        document.getElementById('auth-forgot').addEventListener('click', async () => {
+            const email = String(form.elements.namedItem('email').value || '').trim();
+            if (!email) {
+                setMessage('Escribe tu correo electrónico para enviarte el enlace de recuperación.', true);
+                form.elements.namedItem('email').focus();
+                return;
+            }
+            const button = document.getElementById('auth-forgot');
+            button.disabled = true;
+            setMessage('Enviando enlace de recuperación…');
+            try {
+                const { error } = await this.supabaseClient.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}${window.location.pathname}`
+                });
+                if (error) throw error;
+                setMessage('Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.');
+            } catch (error) {
+                setMessage(error.message || 'No se pudo enviar el enlace de recuperación.', true);
+            } finally {
+                button.disabled = false;
+            }
+        });
+        form.addEventListener('submit', async event => {
             event.preventDefault();
-            const submitter = event.submitter;
-            const mode = submitter?.dataset.authMode;
-            const formData = new FormData(event.currentTarget);
+            const formData = new FormData(form);
             const email = String(formData.get('email') || '').trim();
             const password = String(formData.get('password') || '');
-            const message = document.getElementById('auth-message');
-            const buttons = event.currentTarget.querySelectorAll('button[type="submit"]');
-            buttons.forEach(button => { button.disabled = true; });
-            if (message) message.textContent = '';
+            submitButton.disabled = true;
+            setMessage('');
 
             try {
                 if (mode === 'signup') {
@@ -256,7 +326,8 @@ const App = {
                         email,
                         password,
                         options: {
-                            emailRedirectTo: window.location.origin
+                            emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
+                            data: { display_name: String(formData.get('displayName') || '').trim() }
                         }
                     });
                     if (error) throw error;
@@ -264,8 +335,8 @@ const App = {
                         this.estado.usuario = data.session.user;
                         this._actualizarCuentaSupabase();
                         this.navegarA(this.estado.vistaDespuesDeAuth);
-                    } else if (message) {
-                        message.textContent = 'Cuenta creada. Revisa tu correo para confirmar la dirección y luego inicia sesión.';
+                    } else {
+                        setMessage('¡Cuenta creada! Revisa tu correo y confirma la dirección para poder iniciar sesión.');
                     }
                 } else {
                     const { data, error } = await this.supabaseClient.auth.signInWithPassword({ email, password });
@@ -275,9 +346,59 @@ const App = {
                     this.navegarA(this.estado.vistaDespuesDeAuth);
                 }
             } catch (error) {
-                if (message) message.textContent = error.message || 'No se pudo completar la autenticación.';
+                setMessage(error.message || 'No se pudo completar la autenticación.', true);
             } finally {
-                buttons.forEach(button => { button.disabled = false; });
+                submitButton.disabled = false;
+            }
+        });
+    },
+
+    _renderRestablecerContrasena() {
+        const main = document.getElementById('main-content');
+        main.innerHTML = `
+            <div class="auth-wrap page-enter">
+                <form class="config-card auth-card auth-form" id="password-reset-form">
+                    <div class="auth-brand">
+                        <div class="auth-brand__logo" aria-hidden="true">⚖️</div>
+                        <p class="auth-brand__eyebrow">BIBLIOLUCH</p>
+                        <h1 class="page-title">Crea una nueva contraseña</h1>
+                        <p class="page-subtitle">Elige una contraseña nueva para proteger tu cuenta.</p>
+                    </div>
+                    <label class="libro-renombrar">Nueva contraseña
+                        <input class="input-num" type="password" name="password" autocomplete="new-password" minlength="6" required>
+                    </label>
+                    <label class="libro-renombrar">Repite la contraseña
+                        <input class="input-num" type="password" name="confirmation" autocomplete="new-password" minlength="6" required>
+                    </label>
+                    <button class="btn btn--gold" type="submit">Guardar contraseña</button>
+                    <p id="password-reset-message" class="auth-message" role="status"></p>
+                </form>
+            </div>`;
+        document.getElementById('password-reset-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const fields = new FormData(form);
+            const password = String(fields.get('password') || '');
+            const message = document.getElementById('password-reset-message');
+            if (password !== String(fields.get('confirmation') || '')) {
+                message.textContent = 'Las contraseñas no coinciden.';
+                message.classList.add('auth-message--error');
+                return;
+            }
+            const button = form.querySelector('button[type="submit"]');
+            button.disabled = true;
+            message.textContent = 'Actualizando contraseña…';
+            try {
+                const { error } = await this.supabaseClient.auth.updateUser({ password });
+                if (error) throw error;
+                this.estado.passwordRecovery = false;
+                message.textContent = 'Contraseña actualizada. Entrando a tu cuenta…';
+                message.classList.add('auth-message--success');
+                setTimeout(() => this.navegarA('biblioteca'), 900);
+            } catch (error) {
+                message.textContent = error.message || 'No se pudo actualizar la contraseña.';
+                message.classList.add('auth-message--error');
+                button.disabled = false;
             }
         });
     },
