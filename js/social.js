@@ -118,21 +118,27 @@ const Social = {
                         if (uploadError) throw uploadError;
                     }
                     const updated = {
-                        user_id: App.estado.usuario.id,
                         username: String(fields.get('username')).trim().toLowerCase(),
                         display_name: String(fields.get('display_name')).trim(),
                         bio: String(fields.get('bio')).trim(),
                         school: String(fields.get('school')).trim(),
                         avatar_path: avatarPath
                     };
-                    const { error } = await App.supabaseClient.from('profiles').upsert(updated, { onConflict: 'user_id' });
+                    const { data, error } = await App.supabaseClient.from('profiles')
+                        .update(updated)
+                        .eq('user_id', App.estado.usuario.id)
+                        .select('user_id')
+                        .maybeSingle();
                     if (error) throw error;
+                    if (!data) throw new Error('No se encontró tu perfil. Recarga la página e inténtalo de nuevo.');
                     feedback.textContent = 'Perfil actualizado.';
                     feedback.classList.add('auth-message--success');
                     avatarFile = null;
                 } catch (error) {
                     feedback.textContent = error.code === '23505'
                         ? 'Ese nombre de usuario ya está ocupado. Prueba con otro.'
+                        : /row-level security policy/i.test(error.message || '')
+                            ? 'Supabase bloqueó el guardado por sus políticas de seguridad. Ejecuta de nuevo supabase/setup.sql en el SQL Editor de tu proyecto.'
                         : (error.message || 'No se pudo guardar el perfil.');
                     feedback.classList.add('auth-message--error');
                 } finally {
