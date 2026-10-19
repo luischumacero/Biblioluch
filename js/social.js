@@ -107,9 +107,11 @@ const Social = {
                 button.disabled = true;
                 feedback.textContent = 'Guardando cambios…';
                 feedback.classList.remove('auth-message--error');
+                let saveStep = 'profile';
                 try {
                     let avatarPath = profile.avatar_path;
                     if (avatarFile) {
+                        saveStep = 'avatar';
                         const extension = avatarFile.type === 'image/png' ? 'png' : avatarFile.type === 'image/webp' ? 'webp' : 'jpg';
                         avatarPath = `${App.estado.usuario.id}/avatar.${extension}`;
                         const { error: uploadError } = await App.supabaseClient.storage
@@ -117,6 +119,7 @@ const Social = {
                             .upload(avatarPath, avatarFile, { upsert: true, contentType: avatarFile.type });
                         if (uploadError) throw uploadError;
                     }
+                    saveStep = 'profile';
                     const updated = {
                         username: String(fields.get('username')).trim().toLowerCase(),
                         display_name: String(fields.get('display_name')).trim(),
@@ -138,7 +141,9 @@ const Social = {
                     feedback.textContent = error.code === '23505'
                         ? 'Ese nombre de usuario ya está ocupado. Prueba con otro.'
                         : /row-level security policy/i.test(error.message || '')
-                            ? 'Supabase bloqueó el guardado por sus políticas de seguridad. Ejecuta de nuevo supabase/setup.sql en el SQL Editor de tu proyecto.'
+                            ? saveStep === 'avatar'
+                                ? 'Supabase bloqueó la foto de perfil. Ejecuta la versión actualizada de supabase/setup.sql en el SQL Editor de tu proyecto y vuelve a intentarlo.'
+                                : 'Supabase bloqueó la actualización del perfil. Verifica que ejecutaste la versión actualizada de supabase/setup.sql en el SQL Editor de tu proyecto.'
                         : (error.message || 'No se pudo guardar el perfil.');
                     feedback.classList.add('auth-message--error');
                 } finally {
