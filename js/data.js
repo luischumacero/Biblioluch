@@ -1,6 +1,5 @@
 /**
- * data.js — Metadatos de las leyes de la Fiscalía General
- * del Estado Plurinacional de Bolivia
+ * data.js — Metadatos de las leyes disponibles en la biblioteca
  */
 
 const LEYES_DATA = [

@@ -95,9 +95,17 @@ create policy "Users can delete their own book files"
 create table if not exists public.community_groups (
     id uuid primary key default gen_random_uuid(),
     name text not null check (char_length(name) between 1 and 80),
+    description text not null default 'Grupo de estudio' check (char_length(description) between 1 and 500),
+    is_public boolean not null default false,
     owner_id uuid not null references auth.users(id) on delete cascade,
     created_at timestamptz not null default now()
 );
+
+alter table public.community_groups
+    add column if not exists description text not null default 'Grupo de estudio'
+        check (char_length(description) between 1 and 500);
+alter table public.community_groups
+    add column if not exists is_public boolean not null default false;
 
 create table if not exists public.community_members (
     group_id uuid not null references public.community_groups(id) on delete cascade,
@@ -129,7 +137,8 @@ alter table public.community_members enable row level security;
 alter table public.community_invites enable row level security;
 alter table public.community_books enable row level security;
 
-grant select on public.community_groups to authenticated;
+revoke select on public.community_groups from authenticated;
+grant select (id, name, description, is_public) on public.community_groups to authenticated;
 grant select on public.community_members, public.community_invites to authenticated;
 grant select, insert, delete on public.community_books to authenticated;
 
@@ -151,11 +160,32 @@ $$;
 revoke all on function public.is_community_member(uuid) from public;
 grant execute on function public.is_community_member(uuid) to authenticated;
 
+create or replace function public.is_community_owner(p_group_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select exists (
+        select 1
+        from public.community_members
+        where group_id = p_group_id
+          and user_id = (select auth.uid())
+          and role = 'owner'
+    );
+$$;
+
+revoke all on function public.is_community_owner(uuid) from public;
+grant execute on function public.is_community_owner(uuid) to authenticated;
+
 drop policy if exists "Members can view their groups" on public.community_groups;
-create policy "Members can view their groups"
+drop policy if exists "Members can view their groups and public groups" on public.community_groups;
+drop policy if exists "Members and everyone can view public groups" on public.community_groups;
+create policy "Members can view their groups and public groups"
     on public.community_groups for select
     to authenticated
-    using (public.is_community_member(id));
+    using (is_public or public.is_community_member(id));
 
 drop policy if exists "Members can view group membership" on public.community_members;
 create policy "Members can view group membership"
@@ -167,12 +197,7 @@ drop policy if exists "Owners can view their join codes" on public.community_inv
 create policy "Owners can view their join codes"
     on public.community_invites for select
     to authenticated
-    using (
-        exists (
-            select 1 from public.community_groups
-            where id = group_id and owner_id = (select auth.uid())
-        )
-    );
+    using (public.is_community_owner(group_id));
 
 drop policy if exists "Members can view group books" on public.community_books;
 create policy "Members can view group books"
@@ -196,7 +221,13 @@ create policy "Uploaders can delete their group books"
     to authenticated
     using (user_id = (select auth.uid()) and public.is_community_member(group_id));
 
-create or replace function public.create_community_group(p_name text, p_join_code text)
+drop function if exists public.create_community_group(text, text);
+create or replace function public.create_community_group(
+    p_name text,
+    p_description text,
+    p_is_public boolean,
+    p_join_code text
+)
 returns uuid
 language plpgsql
 security definer
@@ -205,6 +236,7 @@ as $$
 declare
     new_group_id uuid;
     clean_name text := trim(p_name);
+    clean_description text := trim(p_description);
     clean_code text := upper(trim(p_join_code));
 begin
     if auth.uid() is null then
@@ -213,12 +245,18 @@ begin
     if clean_name is null or char_length(clean_name) not between 1 and 80 then
         raise exception 'El nombre del grupo debe tener entre 1 y 80 caracteres.';
     end if;
+    if clean_description is null or char_length(clean_description) not between 1 and 500 then
+        raise exception 'La descripción del grupo debe tener entre 1 y 500 caracteres.';
+    end if;
+    if p_is_public is null then
+        raise exception 'Selecciona si el grupo será público o privado.';
+    end if;
     if clean_code is null or clean_code !~ '^[A-Z0-9]{8,20}$' then
         raise exception 'El código de ingreso no tiene un formato válido.';
     end if;
 
-    insert into public.community_groups (name, owner_id)
-    values (clean_name, (select auth.uid()))
+    insert into public.community_groups (name, description, is_public, owner_id)
+    values (clean_name, clean_description, p_is_public, (select auth.uid()))
     returning id into new_group_id;
 
     insert into public.community_members (group_id, user_id, role)
@@ -229,7 +267,8 @@ begin
 end;
 $$;
 
-create or replace function public.join_community_group(p_join_code text)
+drop function if exists public.join_community_group(text);
+create or replace function public.join_community_group(p_join_code text, p_group_id uuid default null)
 returns uuid
 language plpgsql
 security definer
@@ -243,7 +282,8 @@ begin
     end if;
     select group_id into target_group_id
     from public.community_invites
-    where join_code = upper(trim(p_join_code));
+    where join_code = upper(trim(p_join_code))
+      and (p_group_id is null or group_id = p_group_id);
     if target_group_id is null then
         raise exception 'El código no existe o ya no está activo.';
     end if;
@@ -254,10 +294,10 @@ begin
 end;
 $$;
 
-revoke all on function public.create_community_group(text, text) from public;
-revoke all on function public.join_community_group(text) from public;
-grant execute on function public.create_community_group(text, text) to authenticated;
-grant execute on function public.join_community_group(text) to authenticated;
+revoke all on function public.create_community_group(text, text, boolean, text) from public;
+revoke all on function public.join_community_group(text, uuid) from public;
+grant execute on function public.create_community_group(text, text, boolean, text) to authenticated;
+grant execute on function public.join_community_group(text, uuid) to authenticated;
 
 create table if not exists public.profiles (
     user_id uuid primary key references auth.users(id) on delete cascade,

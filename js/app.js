@@ -220,7 +220,7 @@ const App = {
                 <div class="config-card auth-card">
                     <div class="auth-brand">
                         <div class="auth-brand__logo" aria-hidden="true">⚖️</div>
-                        <p class="auth-brand__eyebrow">BIBLIOLUCH · FISCALÍA BOLIVIA</p>
+                        <p class="auth-brand__eyebrow">BIBLIOLUCH</p>
                         <h1 class="page-title">Tu espacio para estudiar</h1>
                         <p class="page-subtitle">Ingresa a tu cuenta para continuar con tus libros, grupos y conversaciones.</p>
                     </div>
@@ -429,7 +429,6 @@ const App = {
                     <div>
                         <h1 class="biblioteca-header__title">Biblioteca Jurídica</h1>
                         <p class="biblioteca-header__subtitle">
-                            <span class="badge badge--gold">Fiscalía General del Estado Plurinacional de Bolivia</span>
                         </p>
                     </div>
                     <div class="biblioteca-search">
@@ -708,21 +707,31 @@ const App = {
         }
 
         this.estado.grupoComunidad = null;
-        const { data: grupos, error } = await this.supabaseClient
+        const [{ data: grupos, error }, { data: membresias, error: membershipsError }] = await Promise.all([
+            this.supabaseClient
             .from('community_groups')
-            .select('id,name,owner_id,created_at')
-            .order('created_at', { ascending: false });
-        if (error) {
-            main.innerHTML = `<div class="config-card"><h1 class="page-title">COMUNIDAD</h1><p class="config-error">No se pudieron cargar los grupos: ${this._escaparHTML(error.message)}. Ejecuta la configuración SQL actualizada de Supabase.</p></div>`;
+            .select('id,name,description,is_public')
+            .order('name'),
+            this.supabaseClient
+                .from('community_members')
+                .select('group_id,role')
+                .eq('user_id', this.estado.usuario.id)
+        ]);
+        if (error || membershipsError) {
+            const loadError = error || membershipsError;
+            main.innerHTML = `<div class="config-card"><h1 class="page-title">COMUNIDAD</h1><p class="config-error">No se pudieron cargar los grupos: ${this._escaparHTML(loadError.message)}. Ejecuta la configuración SQL actualizada de Supabase.</p></div>`;
             return;
         }
+        const membresiasPorGrupo = new Map((membresias || []).map(membresia => [membresia.group_id, membresia.role]));
+        const misGrupos = (grupos || []).filter(grupo => membresiasPorGrupo.has(grupo.id));
+        const gruposPublicos = (grupos || []).filter(grupo => grupo.is_public && !membresiasPorGrupo.has(grupo.id));
 
         main.innerHTML = `
             <div class="page-enter libros-page">
                 <div class="page-header">
                     <div>
                         <h1 class="page-title">COMUNIDAD</h1>
-                        <p class="page-subtitle">Crea grupos de estudio o ingresa con un código para compartir y estudiar PDFs.</p>
+                        <p class="page-subtitle">Crea grupos públicos o privados. Los grupos públicos aparecen aquí; para unirte a cualquiera necesitarás su código.</p>
                     </div>
                 </div>
                 <div class="comunidad-acciones">
@@ -730,6 +739,15 @@ const App = {
                         <h2>Crear un grupo</h2>
                         <label class="libro-renombrar">Nombre del grupo
                             <input class="input-num" name="name" maxlength="80" required placeholder="Ej. Grupo de lectura">
+                        </label>
+                        <label class="libro-renombrar">Descripción
+                            <textarea class="input-num" name="description" maxlength="500" required rows="3" placeholder="¿Qué estudiarán en este grupo?"></textarea>
+                        </label>
+                        <label class="libro-renombrar">Visibilidad
+                            <select class="input-num" name="is_public" required>
+                                <option value="false">Privado: solo visible para sus miembros</option>
+                                <option value="true">Público: aparece en la lista de grupos</option>
+                            </select>
                         </label>
                         <button class="btn btn--gold" type="submit">Crear grupo y obtener código</button>
                     </form>
@@ -743,12 +761,28 @@ const App = {
                 </div>
                 <section class="comunidad-grupos">
                     <h2 class="opcion-label">Mis grupos</h2>
-                    ${(grupos || []).length ? `<div class="leyes-grid">${grupos.map(grupo => `
+                    ${misGrupos.length ? `<div class="leyes-grid">${misGrupos.map(grupo => `
                         <article class="ley-card">
-                            <div class="ley-card__header"><span class="ley-card__icon">👥</span><span class="ley-card__badge">${grupo.owner_id === this.estado.usuario.id ? 'Administrador' : 'Miembro'}</span></div>
-                            <div class="ley-card__body"><h2 class="ley-card__titulo">${this._escaparHTML(grupo.name)}</h2></div>
+                            <div class="ley-card__header"><span class="ley-card__icon">👥</span><span class="ley-card__badge">${membresiasPorGrupo.get(grupo.id) === 'owner' ? 'Administrador' : 'Miembro'} · ${grupo.is_public ? 'Público' : 'Privado'}</span></div>
+                            <div class="ley-card__body"><h2 class="ley-card__titulo">${this._escaparHTML(grupo.name)}</h2><p class="ley-card__desc">${this._escaparHTML(grupo.description)}</p></div>
                             <div class="ley-card__footer"><button class="btn btn--gold btn-abrir-comunidad" data-group-id="${grupo.id}">Abrir grupo</button></div>
                         </article>`).join('')}</div>` : '<div class="libros-vacio">Todavía no perteneces a ningún grupo. Crea uno o ingresa con un código.</div>'}
+                </section>
+                <section class="comunidad-grupos">
+                    <h2 class="opcion-label">Grupos públicos</h2>
+                    ${gruposPublicos.length ? `<div class="leyes-grid">${gruposPublicos.map(grupo => `
+                        <article class="ley-card">
+                            <div class="ley-card__header"><span class="ley-card__icon">🌐</span><span class="ley-card__badge">Público</span></div>
+                            <div class="ley-card__body"><h2 class="ley-card__titulo">${this._escaparHTML(grupo.name)}</h2><p class="ley-card__desc">${this._escaparHTML(grupo.description)}</p></div>
+                            <div class="ley-card__footer">
+                                <form class="comunidad-unirse-publico" data-group-id="${grupo.id}" data-group-name="${this._escaparHTML(grupo.name)}">
+                                    <label class="libro-renombrar">Código de ingreso
+                                        <input class="input-num" name="code" maxlength="20" minlength="8" required placeholder="Escribe el código">
+                                    </label>
+                                    <button class="btn btn--gold" type="submit">Unirme al grupo</button>
+                                </form>
+                            </div>
+                        </article>`).join('')}</div>` : '<div class="libros-vacio">Todavía no hay grupos públicos disponibles.</div>'}
                 </section>
             </div>`;
 
@@ -764,8 +798,11 @@ const App = {
                 const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
                 const random = crypto.getRandomValues(new Uint8Array(12));
                 const code = [...random].map(value => chars[value % chars.length]).join('');
+                const fields = new FormData(form);
                 const { data: id, error: createError } = await this.supabaseClient.rpc('create_community_group', {
-                    p_name: new FormData(form).get('name'),
+                    p_name: fields.get('name'),
+                    p_description: fields.get('description'),
+                    p_is_public: fields.get('is_public') === 'true',
                     p_join_code: code
                 });
                 if (createError) throw new Error(`No se pudo crear el grupo: ${createError.message}`);
@@ -791,17 +828,48 @@ const App = {
                 submit.disabled = false;
             }
         });
+        document.querySelectorAll('.comunidad-unirse-publico').forEach(form => form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const submit = form.querySelector('button[type="submit"]');
+            submit.disabled = true;
+            try {
+                const code = String(new FormData(form).get('code') || '').trim().toUpperCase();
+                const { data: id, error: joinError } = await this.supabaseClient.rpc('join_community_group', {
+                    p_join_code: code,
+                    p_group_id: form.dataset.groupId
+                });
+                if (joinError) throw new Error(joinError.message);
+                this.navegarA('comunidad', { groupId: id });
+            } catch (joinError) {
+                alert(`No se pudo ingresar a ${form.dataset.groupName}: ${joinError.message}`);
+                submit.disabled = false;
+            }
+        }));
     },
 
     async _renderDetalleComunidad(groupId) {
         const main = document.getElementById('main-content');
         const { data: grupo, error: groupError } = await this.supabaseClient
             .from('community_groups')
-            .select('id,name,owner_id')
+            .select('id,name,description,is_public')
             .eq('id', groupId)
             .maybeSingle();
         if (groupError || !grupo) {
             main.innerHTML = `<div class="config-card"><p class="config-error">No se pudo abrir este grupo. Puede que ya no seas miembro${groupError ? `: ${this._escaparHTML(groupError.message)}` : '.'}</p><button class="btn btn--outline" id="btn-volver-comunidades">Volver a COMUNIDAD</button></div>`;
+            document.getElementById('btn-volver-comunidades')?.addEventListener('click', () => this.navegarA('comunidad'));
+            return;
+        }
+        const { data: membership, error: membershipError } = await this.supabaseClient
+            .from('community_members')
+            .select('role')
+            .eq('group_id', groupId)
+            .eq('user_id', this.estado.usuario.id)
+            .maybeSingle();
+        if (membershipError || !membership) {
+            const message = membershipError
+                ? `No se pudo comprobar tu acceso al grupo: ${membershipError.message}`
+                : 'Solo los miembros pueden ver los archivos. Vuelve a COMUNIDAD e ingresa con el código del grupo.';
+            main.innerHTML = `<div class="config-card"><p class="config-error">${this._escaparHTML(message)}</p><button class="btn btn--outline" id="btn-volver-comunidades">Volver a COMUNIDAD</button></div>`;
             document.getElementById('btn-volver-comunidades')?.addEventListener('click', () => this.navegarA('comunidad'));
             return;
         }
@@ -826,7 +894,7 @@ const App = {
         this.estado.librosComunidad = librosPreparados;
 
         let codigoInvitacion = '';
-        if (grupo.owner_id === this.estado.usuario.id) {
+        if (membership.role === 'owner') {
             const { data: invite, error: inviteError } = await this.supabaseClient
                 .from('community_invites')
                 .select('join_code')
@@ -840,7 +908,7 @@ const App = {
             <div class="page-enter libros-page">
                 <div class="page-header">
                     <button class="btn btn--ghost" id="btn-volver-comunidades">‹ COMUNIDAD</button>
-                    <div><h1 class="page-title">${this._escaparHTML(grupo.name)}</h1><p class="page-subtitle">PDFs compartidos con los miembros de este grupo.</p></div>
+                    <div><h1 class="page-title">${this._escaparHTML(grupo.name)}</h1><p class="page-subtitle">${this._escaparHTML(grupo.description)} · Grupo ${grupo.is_public ? 'público' : 'privado'}; los PDFs son solo para sus miembros.</p></div>
                     <button type="button" class="btn btn--gold" id="btn-subir-pdf-comunidad">📥 Subir PDF</button>
                     <input type="file" id="input-pdf-comunidad" accept="application/pdf,.pdf" hidden>
                 </div>

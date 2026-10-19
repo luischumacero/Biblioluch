@@ -1,5 +1,5 @@
 /* ============================================================
-   styles.css — Biblioteca Virtual · Fiscalía Bolivia
+   styles.css — Biblioteca Virtual
    Tema: Dark Premium + Gold Accent
    ============================================================ */
 
@@ -205,6 +205,12 @@ body.auth-required .auth-wrap {
     color: var(--text-1);
     font-size: 18px;
 }
+.comunidad-unirse-publico {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+}
+.comunidad-unirse-publico .btn { width: 100%; }
 .comunidad-grupos {
     display: grid;
     gap: 12px;
