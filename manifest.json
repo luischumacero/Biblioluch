@@ -1,0 +1,26 @@
+{
+    "id": "./",
+    "name": "Biblioluch — Biblioteca de estudio",
+    "short_name": "Biblioluch",
+    "description": "Tu biblioteca virtual para estudiar, organizar libros y compartir materiales.",
+    "lang": "es",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#f4f6fb",
+    "theme_color": "#f4f6fb",
+    "icons": [
+        {
+            "src": "logo-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

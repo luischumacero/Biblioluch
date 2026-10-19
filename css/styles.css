@@ -1889,6 +1889,27 @@ html, body {
     background: var(--bg-2);
     box-shadow: 0 5px 20px rgba(35,39,78,.045);
 }
+.app-install-button {
+    position: absolute;
+    right: clamp(18px, 3vw, 36px);
+    min-height: 40px;
+    padding: 9px 14px;
+    font-size: 12px;
+}
+.install-help {
+    width: min(420px, calc(100% - 32px));
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--bg-2);
+    color: var(--text-1);
+    box-shadow: 0 24px 80px rgba(20, 28, 54, .28);
+}
+.install-help::backdrop { background: rgba(18, 25, 43, .55); }
+.install-help__content { display: grid; gap: 16px; padding: 24px; }
+.install-help__content h2 { font-size: 20px; }
+.install-help__content p { color: var(--text-2); line-height: 1.6; }
+.install-help__content .btn { justify-self: end; }
 .app-topbar__brand {
     display: inline-flex;
     align-items: center;
@@ -2064,6 +2085,12 @@ body.theme-dark .app-topbar__logo { border-color: #fff; }
         height: 64px;
         justify-content: center;
         padding: 5px 15px;
+    }
+    .app-install-button {
+        right: 12px;
+        min-height: 36px;
+        padding: 7px 9px;
+        font-size: 11px;
     }
     .app-topbar__brand { gap: 0; }
     .app-topbar__logo {

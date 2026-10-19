@@ -14,6 +14,12 @@ La biblioteca personal y la sección COMUNIDAD usan Supabase Auth, políticas RL
 
 6. Publica los cambios de la aplicación. La URL y clave publishable se usan en el navegador; la seguridad de los datos depende de las políticas RLS del SQL, no de ocultar la clave pública.
 
+## Instalar Biblioluch en el celular
+
+- Publica la aplicación en una dirección HTTPS. El botón **Instalar app** aparecerá en la barra superior; en Android y navegadores compatibles abrirá la confirmación del navegador. En iPhone, abre el sitio en Safari, toca **Instalar app** y sigue las instrucciones para añadirlo a la pantalla de inicio.
+- Si el botón no abre una confirmación automática, usa el menú del navegador y elige **Instalar aplicación** o **Añadir a pantalla de inicio**. En iPhone, la opción está en **Compartir → Añadir a pantalla de inicio**.
+- En desarrollo local, `http://localhost` también permite probar la instalación. El service worker guarda solo los recursos de la interfaz; los libros, los mensajes y las operaciones de Supabase siguen necesitando conexión y nunca se guardan en ese caché.
+
 ## Publicar en Cloudflare Workers
 
 El sitio es estático y sus PDFs personales viven en Supabase. El archivo [`.assetsignore`](./.assetsignore) impide que Cloudflare publique `node_modules` (que puede contener el binario `workerd`), la carpeta local `LIBROS PDF` y archivos de configuración/servidor que no son recursos de la web. Mantén `node_modules/` también en `.gitignore`; no cambies el directorio de recursos de Workers a la raíz sin conservar estas exclusiones.

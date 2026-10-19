@@ -7,11 +7,16 @@
     <meta name="description"
         content="Biblioteca virtual de estudio. Organiza tus libros, estudia leyes y comparte materiales con grupos de aprendizaje.">
     <meta name="theme-color" content="#f4f6fb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Biblioluch">
 
     <title>Biblioluch — Biblioteca de estudio</title>
 
     <!-- Logo de Biblioluch -->
     <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo-192.png">
+    <link rel="manifest" href="manifest.json">
 
     <!-- Fuentes Google -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,6 +40,7 @@
                 <img class="app-topbar__logo" src="logo.png" alt="Biblioluch">
                 <span class="app-topbar__name">Tu espacio para estudiar</span>
             </a>
+            <button class="btn btn--gold app-install-button" id="install-app-button" type="button" hidden>Instalar app</button>
         </header>
 
         <!-- ════════════════ SIDEBAR ════════════════ -->
@@ -147,6 +153,14 @@
 
     </div><!-- /app-layout -->
 
+    <dialog class="install-help" id="install-help" aria-labelledby="install-help-title">
+        <div class="install-help__content">
+            <h2 id="install-help-title">Instalar Biblioluch</h2>
+            <p id="install-instructions"></p>
+            <button class="btn btn--gold" id="close-install-help" type="button">Entendido</button>
+        </div>
+    </dialog>
+
     <!-- ════════════════ LOADING OVERLAY ════════════════ -->
     <div class="loading-overlay" id="loading-overlay" role="dialog" aria-label="Cargando" aria-live="polite">
         <div class="loading-card">
@@ -168,6 +182,7 @@
     <script src="js/supabase-config.js"></script>
     <script src="js/app.js"></script>
     <script src="js/social.js"></script>
+    <script src="js/pwa.js"></script>
 
 </body>
 
