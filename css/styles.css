@@ -778,6 +778,8 @@ body.auth-required .auth-wrap {
 .social-textarea { resize: vertical; min-height: 96px; }
 .social-form-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .social-form-footer .auth-message { flex: 1; }
+.messages-chat-page { min-height: min(760px, calc(100vh - 180px)); }
+.messages-chat-page__header { justify-content: flex-start; }
 .messages-layout { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; min-height: 620px; }
 .messages-sidebar { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
 .messages-sidebar h2 { font-size: 15px; }

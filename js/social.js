@@ -4,6 +4,7 @@ const Social = {
     senderNames: new Map(),
     realtimeChannel: null,
     renderVersion: 0,
+    conversationRequestId: 0,
 
     escape(value) {
         return App._escaparHTML(String(value ?? ''));
@@ -158,6 +159,7 @@ const Social = {
 
     async renderMessages() {
         const version = ++this.renderVersion;
+        this.conversationRequestId++;
         if (!this.requireSession()) return;
         await this.removeRealtimeChannel();
         this.activeConversationId = null;
@@ -305,10 +307,23 @@ const Social = {
     },
 
     async openConversation(conversationId) {
+        const requestId = ++this.conversationRequestId;
         this.activeConversationId = conversationId;
         await this.removeRealtimeChannel();
+        if (requestId !== this.conversationRequestId || App.estado.vista !== 'mensajes') return;
+        const main = document.getElementById('main-content');
+        if (!main) return;
+        main.innerHTML = `
+            <div class="page-enter social-page messages-chat-page">
+                <header class="page-header messages-chat-page__header">
+                    <button class="btn btn--outline" id="back-to-messages" type="button">← Volver a mensajes</button>
+                </header>
+                <section class="config-card conversation-panel" id="conversation-panel">
+                    <p class="profile-hint">Cargando mensajes…</p>
+                </section>
+            </div>`;
+        document.getElementById('back-to-messages').addEventListener('click', () => this.renderMessages());
         const panel = document.getElementById('conversation-panel');
-        if (!panel) return;
         panel.innerHTML = '<p class="profile-hint">Cargando mensajes…</p>';
         try {
             const { data: conversation, error: conversationError } = await App.supabaseClient
@@ -335,7 +350,10 @@ const Social = {
                 .select('user_id,display_name,username')
                 .in('user_id', memberIds);
             if (profilesError) throw profilesError;
-            if (conversationId !== this.activeConversationId || !document.getElementById('conversation-panel')) return;
+            if (requestId !== this.conversationRequestId
+                || conversationId !== this.activeConversationId
+                || App.estado.vista !== 'mensajes'
+                || !document.getElementById('conversation-panel')) return;
             this.senderNames = new Map((profiles || []).map(profile => [
                 profile.user_id,
                 profile.display_name || `@${profile.username}`
@@ -354,15 +372,19 @@ const Social = {
             const list = document.getElementById('message-list');
             list.scrollTop = list.scrollHeight;
             document.getElementById('message-form').addEventListener('submit', event => this.sendMessage(event, conversationId));
-            this.realtimeChannel = App.supabaseClient.channel(`messages:${conversationId}`)
+            this.realtimeChannel = App.supabaseClient.channel(`messages:${conversationId}:${requestId}`)
                 .on('postgres_changes', {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'messages',
                     filter: `conversation_id=eq.${conversationId}`
-                }, payload => this.appendMessage(payload.new))
+                }, payload => {
+                    if (requestId === this.conversationRequestId) this.appendMessage(payload.new);
+                })
                 .subscribe((status, error) => {
-                    if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && this.activeConversationId === conversationId) {
+                    if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')
+                        && requestId === this.conversationRequestId
+                        && this.activeConversationId === conversationId) {
                         const notice = document.createElement('p');
                         notice.className = 'config-error';
                         notice.textContent = `No se pudo conectar la actualización en tiempo real${error?.message ? `: ${error.message}` : '. Comprueba la publicación supabase_realtime.'}`;
@@ -370,6 +392,7 @@ const Social = {
                     }
                 });
         } catch (error) {
+            if (requestId !== this.conversationRequestId) return;
             panel.innerHTML = `<p class="config-error">No se pudieron abrir los mensajes: ${this.escape(error.message)}</p>`;
         }
     },
