@@ -244,6 +244,11 @@ const App = {
                             <p class="auth-switch"><span id="auth-switch-prompt">¿Aún no tienes cuenta?</span>
                                 <button class="auth-link" type="button" id="auth-mode-toggle">Crear una cuenta</button>
                             </p>
+                            <a class="auth-support-button" href="https://wa.me/message/J6GSJEWVOQYGP1"
+                                target="_blank" rel="noopener noreferrer" aria-label="Problemas al registrarte, contáctanos por WhatsApp">
+                                <span aria-hidden="true">🟢</span>
+                                Problemas al registrarte — Escríbenos por WhatsApp
+                            </a>
                         </form>
                     ` : `
                         <div class="auth-setup-note">

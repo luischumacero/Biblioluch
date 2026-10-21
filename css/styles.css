@@ -752,6 +752,26 @@ body.auth-required .auth-wrap {
 .auth-forgot { justify-self: end; margin-top: -8px; }
 .auth-submit { width: 100%; min-height: 48px; }
 .auth-switch { display: flex; justify-content: center; gap: 6px; color: var(--text-2); font-size: 13px; }
+.auth-support-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 10px 14px;
+    border: 1px solid rgba(37, 211, 102, .45);
+    border-radius: var(--radius-sm);
+    background: rgba(37, 211, 102, .08);
+    color: var(--text-1);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    transition: background .2s ease, border-color .2s ease;
+}
+.auth-support-button:hover {
+    border-color: rgba(37, 211, 102, .75);
+    background: rgba(37, 211, 102, .16);
+}
 .auth-message--error { color: var(--red); }
 .auth-message--success { color: var(--green); }
 .auth-card [hidden] { display: none !important; }
