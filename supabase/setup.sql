@@ -621,13 +621,19 @@ create table if not exists public.announcements (
 
 alter table public.announcements enable row level security;
 revoke all on public.announcements from anon, authenticated;
-grant select on public.announcements to authenticated;
+grant select, delete on public.announcements to authenticated;
 
 drop policy if exists "Authenticated users can read announcements" on public.announcements;
 create policy "Authenticated users can read announcements"
     on public.announcements for select
     to authenticated
     using (true);
+
+drop policy if exists "Authors can delete their own announcements" on public.announcements;
+create policy "Authors can delete their own announcements"
+    on public.announcements for delete
+    to authenticated
+    using (author_id = (select auth.uid()));
 
 create table if not exists public.push_subscriptions (
     endpoint text primary key,

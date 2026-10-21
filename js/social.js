@@ -5,6 +5,9 @@ const Social = {
     realtimeChannel: null,
     renderVersion: 0,
     conversationRequestId: 0,
+    pendingAnnouncementIds: [],
+    announcementDialogBound: false,
+    announcementCheckInProgress: false,
 
     escape(value) {
         return App._escaparHTML(String(value ?? ''));
@@ -505,6 +508,7 @@ const Social = {
                         ${announcements.length ? announcements.map(item => this.renderAnnouncement(item)).join('') : '<div class="config-card"><p class="profile-hint">Todavía no hay anuncios.</p></div>'}
                     </section>
                 </div>`;
+            this.bindAnnouncementDeleteButtons(main);
             PushNotifications.bindEnableButton();
             document.getElementById('announcement-form')?.addEventListener('submit', event => this.publishAnnouncement(event));
             this.realtimeChannel = App.supabaseClient.channel(`announcements:${version}`)
@@ -518,6 +522,20 @@ const Social = {
                     if (!list || list.querySelector(`[data-announcement-id="${CSS.escape(payload.new.id)}"]`)) return;
                     list.querySelector('.profile-hint')?.closest('.config-card')?.remove();
                     list.insertAdjacentHTML('afterbegin', this.renderAnnouncement(payload.new));
+                    this.bindAnnouncementDeleteButtons(list);
+                    this.showPendingAnnouncements();
+                })
+                .on('postgres_changes', {
+                    event: 'DELETE',
+                    schema: 'public',
+                    table: 'announcements'
+                }, payload => {
+                    if (version !== this.renderVersion || App.estado.vista !== 'anuncios') return;
+                    const list = document.getElementById('announcements-list');
+                    list?.querySelector(`[data-announcement-id="${CSS.escape(payload.old.id)}"]`)?.remove();
+                    if (list && !list.querySelector('[data-announcement-id]')) {
+                        list.innerHTML = '<div class="config-card"><p class="profile-hint">Todavía no hay anuncios.</p></div>';
+                    }
                 })
                 .subscribe((status, channelError) => {
                     if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')
@@ -538,11 +556,92 @@ const Social = {
     },
 
     renderAnnouncement(item) {
+        const canDelete = item.author_id === App.estado.usuario?.id;
         return `<article class="config-card announcement-card" data-announcement-id="${this.escape(item.id)}">
             <time datetime="${this.escape(item.created_at)}">${new Date(item.created_at).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })}</time>
             <h2>${this.escape(item.title)}</h2>
             <p>${this.escape(item.body)}</p>
+            ${canDelete ? `<button class="announcement-delete" type="button" data-delete-announcement="${this.escape(item.id)}">Eliminar mi anuncio</button>` : ''}
         </article>`;
+    },
+
+    async showPendingAnnouncements() {
+        if (!App.supabaseClient || !App.estado.usuario) return;
+        const dialog = document.getElementById('announcements-dialog');
+        const list = document.getElementById('announcements-dialog-list');
+        if (!dialog || !list || dialog.open || this.announcementCheckInProgress) return;
+        if (!this.announcementDialogBound) {
+            const markAsSeen = () => {
+                this.pendingAnnouncementIds.forEach(id => {
+                    localStorage.setItem(`biblioluch_announcement_seen_${App.estado.usuario?.id}_${id}`, '1');
+                });
+                this.pendingAnnouncementIds = [];
+            };
+            dialog.addEventListener('close', markAsSeen);
+            document.getElementById('close-announcements-dialog').addEventListener('click', () => dialog.close());
+            document.getElementById('dismiss-announcements-dialog').addEventListener('click', () => dialog.close());
+            document.getElementById('view-all-announcements').addEventListener('click', () => {
+                dialog.close();
+                App.navegarA('anuncios');
+            });
+            this.announcementDialogBound = true;
+        }
+        this.announcementCheckInProgress = true;
+        try {
+            const userId = App.estado.usuario.id;
+            const { data, error } = await App.supabaseClient.from('announcements')
+                .select('id,title,body,author_id,created_at')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            if (error) throw error;
+            if (App.estado.usuario?.id !== userId || dialog.open) return;
+            const unseen = (data || []).filter(item =>
+                !localStorage.getItem(`biblioluch_announcement_seen_${userId}_${item.id}`)
+            ).slice(0, 10);
+            if (!unseen.length) return;
+            this.pendingAnnouncementIds = unseen.map(item => item.id);
+            list.innerHTML = unseen.map(item => this.renderAnnouncement(item)).join('');
+            this.bindAnnouncementDeleteButtons(list);
+            dialog.showModal();
+        } catch (error) {
+            console.error('No se pudieron comprobar los anuncios pendientes:', error);
+        } finally {
+            this.announcementCheckInProgress = false;
+        }
+    },
+
+    bindAnnouncementDeleteButtons(container) {
+        container.querySelectorAll('[data-delete-announcement]').forEach(button => {
+            if (button.dataset.deleteBound === 'true') return;
+            button.dataset.deleteBound = 'true';
+            button.addEventListener('click', () => this.deleteAnnouncement(button.dataset.deleteAnnouncement, button));
+        });
+    },
+
+    async deleteAnnouncement(announcementId, button) {
+        if (!window.confirm('¿Quieres eliminar este anuncio? Esta acción no se puede deshacer.')) return;
+        button.disabled = true;
+        try {
+            const { data, error } = await App.supabaseClient.from('announcements')
+                .delete()
+                .eq('id', announcementId)
+                .eq('author_id', App.estado.usuario.id)
+                .select('id');
+            if (error) throw error;
+            if (!data?.length) throw new Error('Solo el creador puede eliminar este anuncio.');
+            document.querySelectorAll(`[data-announcement-id="${CSS.escape(announcementId)}"]`).forEach(article => article.remove());
+            const list = document.getElementById('announcements-list');
+            if (list && !list.querySelector('[data-announcement-id]')) {
+                list.innerHTML = '<div class="config-card"><p class="profile-hint">Todavía no hay anuncios.</p></div>';
+            }
+        } catch (error) {
+            const article = button.closest('[data-announcement-id]');
+            const notice = document.createElement('p');
+            notice.className = 'config-error';
+            notice.textContent = `No se pudo eliminar el anuncio: ${error.message}`;
+            article?.append(notice);
+            button.disabled = false;
+        }
     },
 
     async publishAnnouncement(event) {
@@ -576,6 +675,7 @@ const Social = {
             list.querySelector('.profile-hint')?.closest('.config-card')?.remove();
             if (!list.querySelector(`[data-announcement-id="${CSS.escape(data.announcement.id)}"]`)) {
                 list.insertAdjacentHTML('afterbegin', this.renderAnnouncement(data.announcement));
+                this.bindAnnouncementDeleteButtons(list);
             }
         } catch (error) {
             status.textContent = `No se pudo publicar el anuncio: ${error.message}`;

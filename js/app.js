@@ -61,13 +61,12 @@ const App = {
         const requestedView = launchParams.get('view');
         if (requestedView === 'anuncios') {
             this.navegarA('anuncios');
-            return;
-        }
-        if (requestedView === 'mensajes') {
+        } else if (requestedView === 'mensajes') {
             this.navegarA('mensajes');
-            return;
+        } else {
+            this.navegarA('biblioteca');
         }
-        this.navegarA('biblioteca');
+        if (this.estado.usuario) await Social.showPendingAnnouncements();
     },
 
     async _inicializarSupabase() {
@@ -98,6 +97,7 @@ const App = {
                 this._mostrarAutenticacion('biblioteca');
             } else if (this.estado.usuario && event === 'SIGNED_IN' && this.estado.vista === 'auth') {
                 this.navegarA(this.estado.vistaDespuesDeAuth || 'biblioteca');
+                Social.showPendingAnnouncements();
             }
         });
         this._actualizarCuentaSupabase();
