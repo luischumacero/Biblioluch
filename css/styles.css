@@ -752,6 +752,26 @@ body.auth-required .auth-wrap {
 .auth-forgot { justify-self: end; margin-top: -8px; }
 .auth-submit { width: 100%; min-height: 48px; }
 .auth-switch { display: flex; justify-content: center; gap: 6px; color: var(--text-2); font-size: 13px; }
+.notification-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+.notification-status {
+    min-height: 20px;
+    color: var(--text-2);
+    font-size: 13px;
+}
+.notification-status--error { color: var(--red); }
+.notification-status--success { color: var(--green); }
+.announcements-list { display: grid; gap: 14px; }
+.announcement-card { display: grid; gap: 10px; }
+.announcement-card h2 { margin: 0; color: var(--text-1); font-size: 18px; }
+.announcement-card p { margin: 0; color: var(--text-2); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.announcement-card time { color: var(--text-3); font-size: 12px; }
+.announcement-form { display: grid; gap: 14px; }
+.announcement-form h2 { margin: 0; color: var(--text-1); font-size: 18px; }
 .auth-support-button {
     display: flex;
     justify-content: center;
@@ -2182,6 +2202,7 @@ body.theme-dark .app-topbar__logo { border-color: #fff; }
     #nav-comunidad::after { content: "Comunidad"; }
     #nav-perfil::after { content: "Perfil"; }
     #nav-mensajes::after { content: "Mensajes"; }
+    #nav-anuncios::after { content: "Anuncios"; }
     .sidebar__nav > .sidebar__support {
         display: flex !important;
         flex: 0 0 58px;

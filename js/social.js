@@ -188,6 +188,10 @@ const Social = {
             main.innerHTML = `
                 <div class="page-enter social-page">
                     <header class="page-header"><div><h1 class="page-title">Mensajes</h1><p class="page-subtitle">Conversa en privado o crea un grupo de estudio.</p></div></header>
+                    <div class="notification-actions">
+                        <button class="btn btn--outline" id="enable-push-notifications" type="button">Activar notificaciones</button>
+                        <p class="notification-status" id="push-notification-status" role="status"></p>
+                    </div>
                     <div class="messages-layout">
                         <aside class="config-card messages-sidebar">
                             <h2>Iniciar conversación</h2>
@@ -218,6 +222,16 @@ const Social = {
                 </div>`;
             document.getElementById('people-search').addEventListener('submit', event => this.searchPeople(event));
             document.getElementById('group-create-form').addEventListener('submit', event => this.createGroup(event));
+            PushNotifications.bindEnableButton();
+            const launchParams = new URLSearchParams(window.location.search);
+            const launchConversationId = launchParams.get('conversation');
+            if (launchConversationId) {
+                launchParams.delete('view');
+                launchParams.delete('conversation');
+                const remainingQuery = launchParams.toString();
+                window.history.replaceState(null, '', `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}${window.location.hash}`);
+                await this.openConversation(launchConversationId);
+            }
             document.querySelectorAll('[data-conversation-id]').forEach(button => {
                 button.addEventListener('click', () => this.openConversation(button.dataset.conversationId));
             });
@@ -427,6 +441,18 @@ const Social = {
             if (error) throw error;
             input.value = '';
             this.appendMessage(data);
+            if (App.supabaseConfig.vapidPublicKey) {
+                try {
+                    const result = await PushNotifications.notifyMessage(data.id);
+                    if (result.failed) throw new Error(`${result.failed} dispositivo(s) no aceptaron la notificación.`);
+                    if (result.warning) throw new Error(result.warning);
+                } catch (notificationError) {
+                    const notice = document.createElement('p');
+                    notice.className = 'config-error';
+                    notice.textContent = `El mensaje se envió, pero no se pudo notificar a sus destinatarios: ${notificationError.message}`;
+                    form.before(notice);
+                }
+            }
         } catch (error) {
             const panel = document.getElementById('conversation-panel');
             if (panel) {
@@ -438,6 +464,124 @@ const Social = {
         } finally {
             button.disabled = false;
             input.focus();
+        }
+    },
+
+    async renderAnnouncements() {
+        const version = ++this.renderVersion;
+        if (!this.requireSession()) return;
+        await this.removeRealtimeChannel();
+        const main = document.getElementById('main-content');
+        main.innerHTML = '<div class="config-card">Cargando anuncios…</div>';
+        try {
+            const { data: announcements, error } = await App.supabaseClient
+                .from('announcements')
+                .select('id,title,body,author_id,created_at')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            if (error) throw error;
+            if (version !== this.renderVersion || App.estado.vista !== 'anuncios') return;
+            const isAdmin = App.estado.usuario.email?.toLowerCase()
+                === App.supabaseConfig.announcementAdminEmail?.toLowerCase();
+            main.innerHTML = `
+                <div class="page-enter social-page">
+                    <header class="page-header"><div><h1 class="page-title">Anuncios</h1><p class="page-subtitle">Avisos para toda la comunidad.</p></div></header>
+                    <div class="notification-actions">
+                        <button class="btn btn--outline" id="enable-push-notifications" type="button">Activar notificaciones</button>
+                        <p class="notification-status" id="push-notification-status" role="status"></p>
+                    </div>
+                    ${isAdmin ? `
+                        <form class="config-card announcement-form" id="announcement-form">
+                            <h2>Publicar un anuncio para todos</h2>
+                            <label class="libro-renombrar">Título
+                                <input class="input-num" name="title" maxlength="120" required placeholder="Ej. Nuevo material disponible">
+                            </label>
+                            <label class="libro-renombrar">Mensaje
+                                <textarea class="input-num social-textarea" name="body" maxlength="2000" rows="4" required placeholder="Escribe el anuncio para la comunidad…"></textarea>
+                            </label>
+                            <div class="social-form-footer"><p class="auth-message" id="announcement-status" role="status"></p><button class="btn btn--gold" type="submit">Publicar anuncio</button></div>
+                        </form>` : ''}
+                    <section class="announcements-list" id="announcements-list" aria-live="polite">
+                        ${announcements.length ? announcements.map(item => this.renderAnnouncement(item)).join('') : '<div class="config-card"><p class="profile-hint">Todavía no hay anuncios.</p></div>'}
+                    </section>
+                </div>`;
+            PushNotifications.bindEnableButton();
+            document.getElementById('announcement-form')?.addEventListener('submit', event => this.publishAnnouncement(event));
+            this.realtimeChannel = App.supabaseClient.channel(`announcements:${version}`)
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'announcements'
+                }, payload => {
+                    if (version !== this.renderVersion || App.estado.vista !== 'anuncios') return;
+                    const list = document.getElementById('announcements-list');
+                    if (!list || list.querySelector(`[data-announcement-id="${CSS.escape(payload.new.id)}"]`)) return;
+                    list.querySelector('.profile-hint')?.closest('.config-card')?.remove();
+                    list.insertAdjacentHTML('afterbegin', this.renderAnnouncement(payload.new));
+                })
+                .subscribe((status, channelError) => {
+                    if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')
+                        && version === this.renderVersion) {
+                        const list = document.getElementById('announcements-list');
+                        if (list) {
+                            const notice = document.createElement('p');
+                            notice.className = 'config-error';
+                            notice.textContent = `Los anuncios no se actualizarán en tiempo real${channelError?.message ? `: ${channelError.message}` : '.'}`;
+                            list.before(notice);
+                        }
+                    }
+                });
+        } catch (error) {
+            if (version !== this.renderVersion) return;
+            main.innerHTML = `<div class="config-card"><h1 class="page-title">Anuncios</h1><p class="config-error">No se pudieron cargar los anuncios: ${this.escape(error.message)}</p><p>Ejecuta la configuración SQL actualizada de Supabase.</p></div>`;
+        }
+    },
+
+    renderAnnouncement(item) {
+        return `<article class="config-card announcement-card" data-announcement-id="${this.escape(item.id)}">
+            <time datetime="${this.escape(item.created_at)}">${new Date(item.created_at).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })}</time>
+            <h2>${this.escape(item.title)}</h2>
+            <p>${this.escape(item.body)}</p>
+        </article>`;
+    },
+
+    async publishAnnouncement(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const button = form.querySelector('button[type="submit"]');
+        const status = document.getElementById('announcement-status');
+        const fields = new FormData(form);
+        const title = String(fields.get('title') || '').trim();
+        const body = String(fields.get('body') || '').trim();
+        if (!title || !body) return;
+        button.disabled = true;
+        status.textContent = 'Publicando anuncio…';
+        status.classList.remove('auth-message--error', 'auth-message--success');
+        try {
+            const { data, error } = await App.supabaseClient.functions.invoke('notifications', {
+                body: { action: 'announcement', title, body }
+            });
+            if (error) throw error;
+            if (!data?.announcement) throw new Error(data?.error || 'El servidor no confirmó la publicación.');
+            form.reset();
+            status.textContent = data.warning
+                ? `Anuncio publicado, pero no se enviaron las notificaciones: ${data.warning}`
+                : data.failed
+                    ? `Anuncio publicado. No se pudo notificar a ${data.failed} dispositivo(s).`
+                    : data.sent
+                    ? `Anuncio publicado y enviado a ${data.sent} dispositivo(s).`
+                    : 'Anuncio publicado. Aún no hay dispositivos suscritos a notificaciones.';
+            status.classList.add(data.failed ? 'auth-message--error' : 'auth-message--success');
+            const list = document.getElementById('announcements-list');
+            list.querySelector('.profile-hint')?.closest('.config-card')?.remove();
+            if (!list.querySelector(`[data-announcement-id="${CSS.escape(data.announcement.id)}"]`)) {
+                list.insertAdjacentHTML('afterbegin', this.renderAnnouncement(data.announcement));
+            }
+        } catch (error) {
+            status.textContent = `No se pudo publicar el anuncio: ${error.message}`;
+            status.classList.add('auth-message--error');
+        } finally {
+            button.disabled = false;
         }
     },
 
@@ -454,13 +598,14 @@ App.navegarA = function (vista, params = {}) {
     navigateApp(vista, params);
     if (vista !== 'mensajes') Social.removeRealtimeChannel();
     if (this.estado.vista === 'auth') return;
-    if (vista !== 'perfil' && vista !== 'mensajes') return;
+    if (vista !== 'perfil' && vista !== 'mensajes' && vista !== 'anuncios') return;
     this.estado.vista = vista;
     document.querySelectorAll('[data-nav]').forEach(element => {
         element.classList.toggle('active', element.dataset.nav === vista);
     });
     if (vista === 'perfil') Social.renderProfile();
-    else Social.renderMessages();
+    else if (vista === 'mensajes') Social.renderMessages();
+    else Social.renderAnnouncements();
 };
 
 window.addEventListener('beforeunload', () => {

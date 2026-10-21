@@ -611,6 +611,58 @@ begin
 end;
 $$;
 
+create table if not exists public.announcements (
+    id uuid primary key default gen_random_uuid(),
+    title text not null check (char_length(title) between 1 and 120),
+    body text not null check (char_length(body) between 1 and 2000),
+    author_id uuid not null references auth.users(id) on delete cascade,
+    created_at timestamptz not null default now()
+);
+
+alter table public.announcements enable row level security;
+revoke all on public.announcements from anon, authenticated;
+grant select on public.announcements to authenticated;
+
+drop policy if exists "Authenticated users can read announcements" on public.announcements;
+create policy "Authenticated users can read announcements"
+    on public.announcements for select
+    to authenticated
+    using (true);
+
+create table if not exists public.push_subscriptions (
+    endpoint text primary key,
+    user_id uuid not null references auth.users(id) on delete cascade,
+    subscription jsonb not null,
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_user_id_idx
+    on public.push_subscriptions(user_id);
+
+alter table public.push_subscriptions enable row level security;
+grant select, insert, update, delete on public.push_subscriptions to authenticated;
+
+drop policy if exists "Users can manage their own push subscriptions" on public.push_subscriptions;
+create policy "Users can manage their own push subscriptions"
+    on public.push_subscriptions for all
+    to authenticated
+    using (user_id = (select auth.uid()))
+    with check (user_id = (select auth.uid()));
+
+do $$
+begin
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+       and not exists (
+           select 1 from pg_publication_tables
+           where pubname = 'supabase_realtime'
+             and schemaname = 'public'
+             and tablename = 'announcements'
+       ) then
+        alter publication supabase_realtime add table public.announcements;
+    end if;
+end;
+$$;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('comunidad-pdf', 'comunidad-pdf', false, 52428800, array['application/pdf'])
 on conflict (id) do update

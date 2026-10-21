@@ -1,4 +1,4 @@
-const CACHE_NAME = 'biblioluch-shell-v1';
+const CACHE_NAME = 'biblioluch-shell-v2';
 const SHELL_FILES = [
     './',
     './index.html',
@@ -12,6 +12,7 @@ const SHELL_FILES = [
     './js/supabase-config.js',
     './js/app.js',
     './js/social.js',
+    './js/notifications.js',
     './js/pwa.js'
 ];
 const SHELL_URLS = new Set(SHELL_FILES.map(file => new URL(file, self.registration.scope).href));
@@ -66,4 +67,35 @@ self.addEventListener('fetch', event => {
             throw new Error(`El recurso solicitado no está disponible sin conexión: ${url.pathname}`);
         })
     );
+});
+
+self.addEventListener('push', event => {
+    let payload = {};
+    try {
+        payload = event.data ? event.data.json() : {};
+    } catch (error) {
+        console.error('No se pudo leer una notificación push:', error);
+    }
+    event.waitUntil(self.registration.showNotification(payload.title || 'Biblioluch', {
+        body: payload.body || 'Tienes una nueva notificación.',
+        icon: './logo-192.png',
+        badge: './logo-192.png',
+        data: payload.data || { url: './' }
+    }));
+});
+
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const target = new URL(event.notification.data?.url || './', self.registration.scope);
+    if (target.origin !== self.location.origin || !target.href.startsWith(self.registration.scope)) return;
+    event.waitUntil((async () => {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const existing = windows.find(client => new URL(client.url).origin === self.location.origin);
+        if (existing) {
+            await existing.navigate(target.href);
+            await existing.focus();
+            return;
+        }
+        await self.clients.openWindow(target.href);
+    })());
 });

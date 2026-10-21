@@ -14,6 +14,29 @@ La biblioteca personal y la sección COMUNIDAD usan Supabase Auth, políticas RL
 
 6. Publica los cambios de la aplicación. La URL y clave publishable se usan en el navegador; la seguridad de los datos depende de las políticas RLS del SQL, no de ocultar la clave pública.
 
+## Notificaciones push y anuncios
+
+Los mensajes privados y los anuncios pueden llegar como notificaciones push aunque la app esté cerrada. Para habilitarlos, cada persona debe activar **Activar notificaciones** desde **Mensajes** o **Anuncios**, aceptar el permiso del navegador y usar Biblioluch desde HTTPS. En iPhone, las notificaciones web push requieren una versión compatible de iOS y que la app esté instalada en la pantalla de inicio.
+
+1. Vuelve a ejecutar [`supabase/setup.sql`](./supabase/setup.sql) para crear las tablas de anuncios y suscripciones push y habilitar la lectura segura de anuncios.
+2. Genera un par de claves VAPID una sola vez con `npx --yes web-push generate-vapid-keys`. No compartas ni publiques la clave privada.
+3. En `js/supabase-config.js`, pega la clave **Public Key** en `vapidPublicKey`. `announcementAdminEmail` identifica qué cuenta ve el formulario de publicación; el servidor también valida el correo por separado.
+4. Instala e inicia sesión en Supabase CLI, vincula el proyecto y despliega la Edge Function:
+
+   ```text
+   supabase login
+   supabase link --project-ref msmckjribvutdgxbupmb
+   supabase functions deploy notifications
+   ```
+
+5. Guarda la clave privada como secreto del servidor (nunca en el frontend) y configura el correo administrador, la clave pública y un asunto VAPID válido:
+
+   ```text
+   supabase secrets set ANNOUNCEMENT_ADMIN_EMAIL=luischumacero9870@gmail.com VAPID_PUBLIC_KEY=TU_CLAVE_PUBLICA VAPID_PRIVATE_KEY=TU_CLAVE_PRIVADA VAPID_SUBJECT=mailto:luischumacero9870@gmail.com
+   ```
+
+6. Publica la web con la clave pública VAPID actualizada. Desde **Anuncios**, la cuenta `luischumacero9870@gmail.com` puede enviar un título y mensaje a toda la comunidad; el servidor rechaza publicaciones de otras cuentas. Los avisos push solo llegan a dispositivos que hayan autorizado las notificaciones. Si el navegador o el dispositivo no admite push, los anuncios igualmente aparecen en la sección **Anuncios**.
+
 ## Instalar Biblioluch en el celular
 
 - Publica la aplicación en una dirección HTTPS. El botón **Instalar app** aparecerá en la barra superior; en Android y navegadores compatibles abrirá la confirmación del navegador. En iPhone, abre el sitio en Safari, toca **Instalar app** y sigue las instrucciones para añadirlo a la pantalla de inicio.
@@ -31,6 +54,7 @@ El sitio es estático y sus PDFs personales viven en Supabase. El archivo [`.ass
 - En **COMUNIDAD**, cualquier usuario con sesión puede crear grupos con nombre, descripción y visibilidad pública o privada. Los grupos públicos muestran solo su nombre y descripción a otros usuarios; para unirse a cualquier grupo siempre se necesita el código de ingreso. Los PDFs y sus códigos no son visibles públicamente: solo los miembros pueden abrir y generar preguntas sobre los PDFs; solo quien subió un PDF puede eliminarlo. Los grupos existentes se conservan como privados.
 - En **Mi perfil**, cada usuario puede editar su nombre de usuario, nombre visible, descripción, institución opcional y foto. Los nombres de usuario deben ser únicos. La búsqueda para iniciar chats se realiza por prefijo del nombre de usuario.
 - En **Mensajes**, los usuarios pueden abrir chats privados o crear grupos de estudio. Al abrir una conversación, esta ocupa una vista independiente con opción para volver a la lista. El flujo de crear grupo añade al creador y al menos dos participantes buscados. Los mensajes se transmiten en tiempo real mediante Supabase Realtime; confirma que la tabla `messages` aparezca en la publicación `supabase_realtime` (el SQL intenta añadirla automáticamente).
+- En **Anuncios**, todos los usuarios autenticados pueden leer los avisos y solo el correo administrador configurado puede publicarlos. Las notificaciones push requieren permiso por dispositivo y que se despliegue la función `notifications` con los secretos VAPID; no se necesita ni se debe publicar una clave secreta en el navegador.
 - Las fotos de perfil se guardan en el bucket público `profile-avatars`; solo la persona dueña puede subir, sustituir o borrar archivos dentro de su carpeta. La política de lectura para la persona dueña permite reemplazar su foto con `upsert`. No guardes información sensible en la descripción o institución del perfil.
 - Los archivos comunitarios se guardan en el bucket privado `comunidad-pdf`; las políticas RLS verifican la membresía tanto para la tabla como para Storage. No hagas público ese bucket ni añadas claves secretas al frontend.
 - Para personalizar el correo, abre **Authentication → Email Templates → Confirm signup** y edita asunto, texto y HTML con el nombre y logo de Biblioluch. Los campos `{{ .ConfirmationURL }}` y `{{ .SiteURL }}` deben conservarse para que el enlace siga confirmando la cuenta. El nombre del remitente/dominio de envío y la entrega con dominio propio se configuran en **Project Settings → Auth → SMTP Settings**; el frontend no puede reemplazar por sí solo el remitente predeterminado de Supabase.

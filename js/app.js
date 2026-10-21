@@ -53,7 +53,18 @@ const App = {
         this._attachSidebarEvents();
         await this._inicializarSupabase();
         if (this.supabaseClient && !this.estado.usuario) {
-            this._mostrarAutenticacion('biblioteca');
+            const requestedView = new URLSearchParams(window.location.search).get('view');
+            this._mostrarAutenticacion(requestedView === 'anuncios' ? 'anuncios' : requestedView === 'mensajes' ? 'mensajes' : 'biblioteca');
+            return;
+        }
+        const launchParams = new URLSearchParams(window.location.search);
+        const requestedView = launchParams.get('view');
+        if (requestedView === 'anuncios') {
+            this.navegarA('anuncios');
+            return;
+        }
+        if (requestedView === 'mensajes') {
+            this.navegarA('mensajes');
             return;
         }
         this.navegarA('biblioteca');
@@ -101,6 +112,7 @@ const App = {
                 if (destino === 'quiz-config') this.navegarA('quiz-config');
                 if (destino === 'libros-pdf') this.navegarA('libros-pdf');
                 if (destino === 'comunidad') this.navegarA('comunidad');
+                if (destino === 'anuncios') this.navegarA('anuncios');
             });
         });
 
@@ -410,6 +422,12 @@ const App = {
 
     async _cerrarSesion() {
         if (!this.supabaseClient) return;
+        try {
+            await PushNotifications.unsubscribeCurrentDevice();
+        } catch (error) {
+            alert(`No se pudieron desactivar las notificaciones de este dispositivo: ${error.message}`);
+            return;
+        }
         const { error } = await this.supabaseClient.auth.signOut();
         if (error) {
             alert(`No se pudo cerrar la sesión: ${error.message}`);
