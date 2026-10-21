@@ -678,7 +678,8 @@ const Social = {
                 this.bindAnnouncementDeleteButtons(list);
             }
         } catch (error) {
-            status.textContent = `No se pudo publicar el anuncio: ${error.message}`;
+            const detail = await PushNotifications.describeFunctionError(error);
+            status.textContent = `No se pudo publicar el anuncio: ${detail}`;
             status.classList.add('auth-message--error');
         } finally {
             button.disabled = false;

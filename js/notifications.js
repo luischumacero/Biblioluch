@@ -65,6 +65,23 @@ const PushNotifications = {
         return data;
     },
 
+    async describeFunctionError(error) {
+        const response = error?.context;
+        if (!(response instanceof Response)) return error?.message || 'Error desconocido.';
+        let detail = '';
+        try {
+            const payload = await response.clone().json();
+            detail = payload.error || payload.message || '';
+        } catch {
+            try {
+                detail = (await response.clone().text()).slice(0, 500);
+            } catch (readError) {
+                console.error('No se pudo leer el detalle del error de Edge Function:', readError);
+            }
+        }
+        return `Error ${response.status} de la función${detail ? `: ${detail}` : ` (${response.statusText || 'sin detalles'})`}`;
+    },
+
     async unsubscribeCurrentDevice() {
         if (!('serviceWorker' in navigator) || !App.estado.usuario) return;
         const registration = await navigator.serviceWorker.getRegistration();
