@@ -131,10 +131,11 @@ const App = {
 
         // Theme initialization
         const savedTheme = localStorage.getItem('bibliolex_theme');
-        if (savedTheme === 'dark') {
-            document.body.classList.add('theme-dark');
-            const btn = document.getElementById('btn-toggle-theme');
-            if (btn) btn.textContent = '☀️ Modo claro';
+        const isDark = savedTheme !== 'light';
+        document.body.classList.toggle('theme-dark', isDark);
+        const themeButton = document.getElementById('btn-toggle-theme');
+        if (themeButton) {
+            themeButton.textContent = isDark ? '☀️ Modo claro' : '🌙 Modo oscuro';
         }
 
         document.getElementById('btn-toggle-theme')?.addEventListener('click', (e) => {

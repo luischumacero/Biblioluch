@@ -1,10 +1,12 @@
-const CACHE_NAME = 'biblioluch-shell-v2';
+const CACHE_NAME = 'biblioluch-shell-v3';
 const SHELL_FILES = [
     './',
     './index.html',
     './manifest.json',
     './logo-192.png',
     './logo.png',
+    './fondo para pc.jpg',
+    './fondo celular.jpg',
     './css/styles.css',
     './js/data.js',
     './js/pdf-parser.js',

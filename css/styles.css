@@ -2156,7 +2156,30 @@ body.theme-dark .sidebar__logo-wrap { border-color: #fff; }
 body.theme-dark .sidebar__support-card { background: rgba(37,211,102,.08); }
 body.theme-dark .app-topbar__logo { border-color: #fff; }
 
+body {
+    isolation: isolate;
+    background: transparent;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+        linear-gradient(rgba(15, 13, 35, .28), rgba(15, 13, 35, .28)),
+        url("../fondo%20para%20pc.jpg") center / cover no-repeat;
+    pointer-events: none;
+}
+
 @media (max-width: 768px) {
+    body::before {
+        background-image:
+            linear-gradient(rgba(15, 13, 35, .24), rgba(15, 13, 35, .24)),
+            url("../fondo%20celular.jpg");
+        background-position: center;
+    }
+
     body:not(.auth-required) .app-layout {
         display: block;
         padding-top: 108px;
@@ -2289,4 +2312,144 @@ body.theme-dark .app-topbar__logo { border-color: #fff; }
     .messages-layout { min-height: 0; }
     .conversation-panel { min-height: 470px; }
     .message-list { min-height: 300px; }
+}
+
+/* ── Light glass surfaces and controls ──────────────────── */
+:root {
+    --glass-surface: rgba(255, 255, 255, .68);
+    --glass-highlight: rgba(255, 255, 255, .82);
+    --glass-edge: rgba(255, 255, 255, .76);
+    --glass-tint: rgba(255, 255, 255, .68);
+    --glass-shadow: 0 14px 36px rgba(48, 55, 105, .09);
+}
+
+body.theme-dark {
+    --glass-surface: rgba(30, 32, 52, .76);
+    --glass-highlight: rgba(255, 255, 255, .12);
+    --glass-edge: rgba(255, 255, 255, .14);
+    --glass-tint: rgba(255, 255, 255, .08);
+    --glass-shadow: 0 14px 36px rgba(0, 0, 0, .22);
+}
+
+.app-topbar,
+.sidebar {
+    background: var(--glass-surface);
+    border-color: var(--glass-edge);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.app-topbar {
+    box-shadow: 0 5px 24px rgba(48, 55, 105, .06), inset 0 1px 0 var(--glass-highlight);
+}
+
+.sidebar {
+    box-shadow: 8px 0 28px rgba(48, 55, 105, .045), inset -1px 0 0 var(--glass-highlight);
+}
+
+.sidebar__link.active {
+    border-color: rgba(98, 88, 232, .18);
+    background: linear-gradient(135deg, var(--glass-tint), var(--gold-glow));
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+.btn,
+.btn-clear-cache,
+.cant-btn {
+    border: 1px solid var(--glass-edge);
+    -webkit-backdrop-filter: blur(8px) saturate(1.35);
+    backdrop-filter: blur(8px) saturate(1.35);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+    transition: transform var(--transition), box-shadow var(--transition), filter var(--transition), background var(--transition);
+}
+
+.btn--gold {
+    border-color: rgba(255, 255, 255, .48);
+    background: linear-gradient(135deg, rgba(126, 116, 244, .94), rgba(87, 77, 220, .88));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .48), 0 7px 20px rgba(98, 88, 232, .2);
+}
+
+.btn--gold:hover {
+    filter: brightness(1.08) saturate(1.1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .58), 0 11px 26px rgba(98, 88, 232, .26);
+    transform: translateY(-2px);
+}
+
+.btn--outline {
+    background: rgba(255, 255, 255, .26);
+}
+
+.btn--outline:hover,
+.btn--ghost:hover,
+.btn-clear-cache:hover,
+.cant-btn:hover {
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 8px 20px rgba(48, 55, 105, .08);
+}
+
+.btn:active {
+    transform: scale(.98);
+}
+
+.btn:focus-visible,
+.btn-clear-cache:focus-visible,
+.cant-btn:focus-visible,
+.sidebar__link:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 3px;
+}
+
+.config-card,
+.ley-card,
+.auth-card,
+.profile-card,
+.messages-sidebar,
+.conversation-panel,
+.pregunta-card,
+.resultados-hero,
+.loading-card,
+.announcements-dialog,
+.install-help,
+.lector-sidebar,
+.revision-item {
+    background: var(--glass-surface);
+    border-color: var(--glass-edge);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
+    -webkit-backdrop-filter: blur(16px) saturate(1.35);
+    backdrop-filter: blur(16px) saturate(1.35);
+}
+
+.ley-card:hover {
+    border-color: rgba(98, 88, 232, .28);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 18px 38px rgba(48, 55, 105, .13);
+}
+
+body.auth-required .auth-card {
+    border: 1px solid rgba(255, 255, 255, .25);
+    background: rgba(255, 255, 255, .05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 2px 16px rgba(0, 0, 0, .08);
+    -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+}
+
+.loading-overlay {
+    background: rgba(227, 231, 245, .48);
+    -webkit-backdrop-filter: blur(14px) saturate(1.25);
+    backdrop-filter: blur(14px) saturate(1.25);
+}
+
+body.theme-dark .loading-overlay {
+    background: rgba(7, 11, 20, .58);
+}
+
+@media (max-width: 768px) {
+    .sidebar__nav,
+    .sidebar__footer {
+        background: var(--glass-surface);
+        -webkit-backdrop-filter: blur(18px) saturate(1.4);
+        backdrop-filter: blur(18px) saturate(1.4);
+    }
+
+    .sidebar__nav {
+        box-shadow: 0 -5px 22px rgba(48, 55, 105, .06), inset 0 1px 0 var(--glass-highlight);
+    }
 }
