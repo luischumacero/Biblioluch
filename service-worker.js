@@ -1,4 +1,4 @@
-const CACHE_NAME = 'biblioluch-shell-v3';
+const CACHE_NAME = 'biblioluch-shell-v5';
 const SHELL_FILES = [
     './',
     './index.html',
@@ -15,7 +15,8 @@ const SHELL_FILES = [
     './js/app.js',
     './js/social.js',
     './js/notifications.js',
-    './js/pwa.js'
+    './js/pwa.js',
+    './js/liquid-glass-nav.js'
 ];
 const SHELL_URLS = new Set(SHELL_FILES.map(file => new URL(file, self.registration.scope).href));
 

@@ -14,9 +14,9 @@
     --border:       #e7eaf2;
     --border-bright:#d9deeb;
 
-    --gold:         #6258e8;
-    --gold-light:   #5146d8;
-    --gold-dark:    #5146d8;
+    --gold:         #141044;
+    --gold-light:   #141044;
+    --gold-dark:    #141044;
     --gold-glow:    rgba(98,88,232,0.10);
 
     --blue:         #3b82f6;
@@ -46,9 +46,9 @@ body.theme-light {
     --bg-card-hov:  #f8f9ff;
     --border:       #e7eaf2;
     --border-bright:#d9deeb;
-    --gold:         #6258e8;
-    --gold-light:   #5146d8;
-    --gold-dark:    #5146d8;
+    --gold:         #141044;
+    --gold-light:   #120f36;
+    --gold-dark:    #13103b;
     --gold-glow:    rgba(98,88,232,0.10);
     --text-1:       #20243a;
     --text-2:       #69718a;
@@ -64,9 +64,9 @@ body.theme-dark {
     --bg-card-hov:  #292b42;
     --border:       #30334b;
     --border-bright:#414561;
-    --gold:         #a79fff;
+    --gold:         #141044;
     --gold-light:   #c2bcff;
-    --gold-dark:    #7569f4;
+    --gold-dark:    #15113b;
     --gold-glow:    rgba(136,124,255,0.16);
     --text-1:       #f4f3ff;
     --text-2:       #b2b4cb;
@@ -2207,6 +2207,7 @@ body::before {
         bottom: auto;
         left: 0;
         width: 100%;
+        max-width: none;
         height: 44px;
         min-height: 0;
         transform: none;
@@ -2344,7 +2345,11 @@ body.theme-dark {
 }
 
 .sidebar {
-    box-shadow: 8px 0 28px rgba(48, 55, 105, .045), inset -1px 0 0 var(--glass-highlight);
+    background: transparent;
+    border-right-color: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 
 .sidebar__link.active {
@@ -2431,6 +2436,109 @@ body.auth-required .auth-card {
     backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
 }
 
+body.auth-required .auth-card .input-num {
+    border-color: rgba(255, 255, 255, .22);
+    background: rgba(255, 255, 255, .09);
+    -webkit-backdrop-filter: blur(8px) saturate(1.2);
+    backdrop-filter: blur(8px) saturate(1.2);
+}
+
+body.auth-required .auth-card .input-num:focus {
+    border-color: rgba(194, 188, 255, .72);
+    background: rgba(255, 255, 255, .14);
+    box-shadow: 0 0 0 3px rgba(167, 159, 255, .16);
+}
+
+body.auth-required .auth-card .auth-submit {
+    border-color: rgba(255, 255, 255, .32);
+    background: linear-gradient(135deg, rgba(126, 116, 244, .82), rgba(87, 77, 220, .76));
+    -webkit-backdrop-filter: blur(8px) saturate(1.35);
+    backdrop-filter: blur(8px) saturate(1.35);
+}
+
+.sidebar__nav {
+    margin: 12px;
+    padding: 12px 10px;
+    border: 1px solid rgba(255, 255, 255, .25);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, .05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
+    -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+}
+
+.sidebar__nav > .sidebar__link {
+    border-color: transparent;
+    transition: transform .2s ease, color .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.sidebar__nav > .sidebar__link:hover,
+.sidebar__nav > .sidebar__link:focus-visible {
+    transform: translateX(3px);
+    border-color: var(--glass-edge);
+    background: linear-gradient(135deg, var(--glass-tint), rgba(255, 255, 255, .025));
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 5px 16px rgba(0, 0, 0, .12);
+    color: var(--text-1);
+}
+
+.sidebar__nav > .sidebar__link.active {
+    border-color: rgba(255, 255, 255, .18);
+    background: linear-gradient(135deg, var(--glass-tint), var(--gold-glow));
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 4px 14px rgba(0, 0, 0, .1);
+    color: var(--gold);
+}
+
+.sidebar__nav > .sidebar__link:active {
+    transform: scale(.98);
+}
+
+.sidebar__nav.liquid-glass-supported {
+    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+}
+
+.liquid-glass-surface {
+    background-color: rgba(255, 255, 255, .05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
+    -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+}
+
+.liquid-glass-surface.liquid-glass-supported {
+    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+}
+
+.liquid-glass-surface.revision-item--ok { border-left-color: var(--green); }
+.liquid-glass-surface.revision-item--error { border-left-color: var(--red); }
+
+.liquid-glass-surface.ley-card {
+    border-color: rgba(255, 255, 255, .2);
+}
+
+.liquid-glass-surface.ley-card:hover {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18), 0 12px 30px rgba(0, 0, 0, .16);
+}
+
+.liquid-glass-surface.auth-card {
+    background-color: rgba(255, 255, 255, .05);
+}
+
+.sidebar__nav > .sidebar__link.liquid-glass-hover {
+    background: rgba(255, 255, 255, .05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
+}
+
+body.auth-required .auth-card.liquid-glass-supported {
+    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+}
+
+.sidebar__nav > .sidebar__link.liquid-glass-supported.liquid-glass-hover {
+    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
+}
+
 .loading-overlay {
     background: rgba(227, 231, 245, .48);
     -webkit-backdrop-filter: blur(14px) saturate(1.25);
@@ -2442,7 +2550,14 @@ body.theme-dark .loading-overlay {
 }
 
 @media (max-width: 768px) {
-    .sidebar__nav,
+    .sidebar {
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
     .sidebar__footer {
         background: var(--glass-surface);
         -webkit-backdrop-filter: blur(18px) saturate(1.4);
@@ -2450,6 +2565,29 @@ body.theme-dark .loading-overlay {
     }
 
     .sidebar__nav {
-        box-shadow: 0 -5px 22px rgba(48, 55, 105, .06), inset 0 1px 0 var(--glass-highlight);
+        right: 10px;
+        bottom: calc(8px + env(safe-area-inset-bottom));
+        left: 10px;
+        width: auto;
+        height: 72px;
+        margin: 0;
+        padding: 6px;
+        gap: 2px;
+        border: 1px solid rgba(255, 255, 255, .25);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .05);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
+        -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+        backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
     }
+
+    .sidebar__nav > .sidebar__link { min-width: 42px; }
+    .sidebar__nav > .sidebar__support { flex-basis: 48px; }
+
+    .sidebar__nav > .sidebar__link:hover,
+    .sidebar__nav > .sidebar__link:focus-visible {
+        transform: translateY(-2px);
+    }
+
+    .sidebar__nav > .sidebar__link:active { transform: scale(.96); }
 }
