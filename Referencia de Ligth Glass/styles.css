@@ -75,76 +75,49 @@ body {
 }
 
 .section-dot:hover,
-.section-dot.active {
+.section-dot:focus-visible {
   background: rgba(255, 255, 255, 0.9);
   transform: scale(1.3);
 }
 
-/* --- Glass element --- */
-glass-element {
+/* --- Superficies de cristal CSS-only --- */
+.glass-element {
   position: fixed;
   z-index: 10;
-  --glass-padding: 16px 28px;
-  user-select: none;
-  touch-action: none;
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
-glass-element:hover:not(.dragging) {
-  animation: bounce-in 0.5s ease forwards;
+.glass-element--pill {
+  bottom: 188px;
+  left: 50%;
+  width: 200px;
+  height: 58px;
+  transform: translateX(-50%);
 }
 
-glass-element.dragging {
-  animation: none !important;
-  transform: none !important;
+.glass-element--square,
+.glass-element--round {
+  bottom: 40px;
+  width: 120px;
+  height: 120px;
 }
 
-@keyframes bounce-in {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.12); }
-  100% { transform: scale(1.07); }
-}
-
-/* --- Botón --- */
-.glass-button {
-  border: 0;
-  background: transparent;
-  color: #fff;
-  font: 700 1.05rem/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-
-.glass-button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.95);
-  outline-offset: 8px;
+.glass-element--square {
+  left: calc(50% - 140px);
   border-radius: 12px;
 }
 
-/* --- Botón icono (cuadrado/redondo) --- */
-.glass-icon {
-  font-size: 1.4rem;
-  line-height: 1;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.glass-element--round {
+  left: calc(50% + 20px);
+  border-radius: 50%;
 }
 
-/* --- Hero / contenedor de controles --- */
-.hero {
-  position: fixed;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-
-.hero .glass-control {
-  position: fixed;
+.glass-element:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 4px;
 }

@@ -2334,8 +2334,8 @@ body.theme-dark {
 .sidebar {
     background: var(--glass-surface);
     border-color: var(--glass-edge);
-    -webkit-backdrop-filter: blur(12px) saturate(1.35);
-    backdrop-filter: blur(12px) saturate(1.35);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 
 .app-topbar {
@@ -2360,8 +2360,8 @@ body.theme-dark {
 .btn-clear-cache,
 .cant-btn {
     border: 1px solid var(--glass-edge);
-    -webkit-backdrop-filter: blur(8px) saturate(1.35);
-    backdrop-filter: blur(8px) saturate(1.35);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
     box-shadow: inset 0 1px 0 var(--glass-highlight);
     transition: transform var(--transition), box-shadow var(--transition), filter var(--transition), background var(--transition);
 }
@@ -2417,8 +2417,8 @@ body.theme-dark {
     background: var(--glass-surface);
     border-color: var(--glass-edge);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
-    -webkit-backdrop-filter: blur(10px) saturate(1.3);
-    backdrop-filter: blur(10px) saturate(1.3);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 
 .ley-card:hover {
@@ -2430,15 +2430,15 @@ body.auth-required .auth-card {
     border: 1px solid rgba(255, 255, 255, .25);
     background: rgba(255, 255, 255, .05);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 2px 16px rgba(0, 0, 0, .08);
-    -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
 }
 
 body.auth-required .auth-card .input-num {
     border-color: rgba(255, 255, 255, .22);
     background: rgba(255, 255, 255, .09);
-    -webkit-backdrop-filter: blur(8px) saturate(1.2);
-    backdrop-filter: blur(8px) saturate(1.2);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
 }
 
 body.auth-required .auth-card .input-num:focus {
@@ -2450,8 +2450,8 @@ body.auth-required .auth-card .input-num:focus {
 body.auth-required .auth-card .auth-submit {
     border-color: rgba(255, 255, 255, .32);
     background: linear-gradient(135deg, rgba(126, 116, 244, .82), rgba(87, 77, 220, .76));
-    -webkit-backdrop-filter: blur(8px) saturate(1.35);
-    backdrop-filter: blur(8px) saturate(1.35);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
 }
 
 .sidebar__nav {
@@ -2461,8 +2461,8 @@ body.auth-required .auth-card .auth-submit {
     border-radius: 22px;
     background: rgba(255, 255, 255, .05);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
-    -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
 }
 
 .sidebar__nav > .sidebar__link {
@@ -2490,51 +2490,47 @@ body.auth-required .auth-card .auth-submit {
     transform: scale(.98);
 }
 
-.sidebar__nav.liquid-glass-supported {
-    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-}
-
-.liquid-glass-surface {
+.sidebar__nav,
+.config-card,
+.ley-card,
+.stats-bar,
+.stat-item,
+.pregunta-card,
+.pregunta-fragmento,
+.resultados-hero,
+.revision-item,
+.ley-option,
+.lector-sidebar,
+.lector-topbar,
+.loading-card,
+.announcements-dialog,
+.install-help,
+.message-bubble,
+.conversation-item,
+.conversation-header,
+.quiz-ley-badge,
+.person-result,
+.libros-vacio,
+.comunidad-codigo {
     background-color: rgba(255, 255, 255, .05);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
-    -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
 }
 
-.liquid-glass-surface.liquid-glass-supported {
-    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-}
+.revision-item.revision-item--ok { border-left-color: var(--green); }
+.revision-item.revision-item--error { border-left-color: var(--red); }
 
-.liquid-glass-surface.revision-item--ok { border-left-color: var(--green); }
-.liquid-glass-surface.revision-item--error { border-left-color: var(--red); }
-
-.liquid-glass-surface.ley-card {
+.ley-card {
     border-color: rgba(255, 255, 255, .2);
 }
 
-.liquid-glass-surface.ley-card:hover {
+.ley-card:hover {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18), 0 12px 30px rgba(0, 0, 0, .16);
 }
 
-.liquid-glass-surface.auth-card {
+.auth-card {
     background-color: rgba(255, 255, 255, .05);
-}
-
-.sidebar__nav > .sidebar__link.liquid-glass-hover {
-    background: rgba(255, 255, 255, .05);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
-}
-
-body.auth-required .auth-card.liquid-glass-supported {
-    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-}
-
-.sidebar__nav > .sidebar__link.liquid-glass-supported.liquid-glass-hover {
-    -webkit-backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
-    backdrop-filter: blur(1px) var(--liquid-glass-filter) blur(2px) brightness(1.1) saturate(1.5);
 }
 
 .loading-overlay {
@@ -2558,8 +2554,8 @@ body.theme-dark .loading-overlay {
 
     .sidebar__footer {
         background: var(--glass-surface);
-        -webkit-backdrop-filter: blur(10px) saturate(1.35);
-        backdrop-filter: blur(10px) saturate(1.35);
+        -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(4px);
     }
 
     .sidebar__nav {
@@ -2575,8 +2571,8 @@ body.theme-dark .loading-overlay {
         border-radius: 22px;
         background: rgba(255, 255, 255, .05);
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 2px 16px rgba(0, 0, 0, .08);
-        -webkit-backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
-        backdrop-filter: blur(2px) brightness(1.1) saturate(1.5);
+        -webkit-backdrop-filter: blur(2px);
+        backdrop-filter: blur(2px);
     }
 
     .sidebar__nav > .sidebar__link { min-width: 42px; }
