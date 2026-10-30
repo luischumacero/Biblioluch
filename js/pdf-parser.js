@@ -3,16 +3,35 @@
  * jerárquica de los PDFs legales bolivianos usando PDF.js.
  */
 
-class PDFParser {
-    constructor() {
-        this._configurarWorker();
-    }
+let pdfJsLoadingPromise = null;
 
-    _configurarWorker() {
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc =
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+class PDFParser {
+    async _cargarPdfJs() {
+        if (!window.pdfjsLib && !pdfJsLoadingPromise) {
+            pdfJsLoadingPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                script.async = true;
+                script.onload = () => {
+                    if (!window.pdfjsLib) {
+                        pdfJsLoadingPromise = null;
+                        reject(new Error('PDF.js se cargó, pero no está disponible.'));
+                        return;
+                    }
+                    resolve(window.pdfjsLib);
+                };
+                script.onerror = () => {
+                    pdfJsLoadingPromise = null;
+                    reject(new Error('No se pudo descargar PDF.js. Revisa tu conexión e inténtalo de nuevo.'));
+                };
+                document.head.appendChild(script);
+            });
         }
+
+        const library = window.pdfjsLib || await pdfJsLoadingPromise;
+        library.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        return library;
     }
 
     /**
@@ -47,6 +66,7 @@ class PDFParser {
 
         let pdf;
         try {
+            const pdfjsLib = await this._cargarPdfJs();
             const tarea = pdfjsLib.getDocument({ url, verbosity: 0 });
             pdf = await tarea.promise;
         } catch (e) {

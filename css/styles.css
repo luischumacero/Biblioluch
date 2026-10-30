@@ -3,8 +3,6 @@
    Tema: Dark Premium + Gold Accent
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap');
-
 /* ── Variables ──────────────────────────────────────────── */
 :root {
     --bg:           #f4f6fb;
@@ -2336,8 +2334,8 @@ body.theme-dark {
 .sidebar {
     background: var(--glass-surface);
     border-color: var(--glass-edge);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(12px) saturate(1.35);
+    backdrop-filter: blur(12px) saturate(1.35);
 }
 
 .app-topbar {
@@ -2419,8 +2417,8 @@ body.theme-dark {
     background: var(--glass-surface);
     border-color: var(--glass-edge);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
-    -webkit-backdrop-filter: blur(16px) saturate(1.35);
-    backdrop-filter: blur(16px) saturate(1.35);
+    -webkit-backdrop-filter: blur(10px) saturate(1.3);
+    backdrop-filter: blur(10px) saturate(1.3);
 }
 
 .ley-card:hover {
@@ -2560,8 +2558,8 @@ body.theme-dark .loading-overlay {
 
     .sidebar__footer {
         background: var(--glass-surface);
-        -webkit-backdrop-filter: blur(18px) saturate(1.4);
-        backdrop-filter: blur(18px) saturate(1.4);
+        -webkit-backdrop-filter: blur(10px) saturate(1.35);
+        backdrop-filter: blur(10px) saturate(1.35);
     }
 
     .sidebar__nav {
