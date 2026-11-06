@@ -1,7 +1,9 @@
-const CACHE_NAME = 'biblioluch-shell-v7';
+const CACHE_NAME = 'biblioluch-shell-v8';
 const SHELL_FILES = [
     './',
     './index.html',
+    './privacidad.html',
+    './terminos.html',
     './manifest.json',
     './logo-192.png',
     './logo.png',
@@ -46,6 +48,8 @@ self.addEventListener('fetch', event => {
         event.respondWith(
             fetch(request).catch(async () => {
                 const cache = await caches.open(CACHE_NAME);
+                const cachedPage = await cache.match(request, { ignoreSearch: true });
+                if (cachedPage) return cachedPage;
                 const offlinePage = await cache.match('./index.html');
                 if (offlinePage) return offlinePage;
                 throw new Error('La página de Biblioluch no está disponible sin conexión.');

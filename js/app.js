@@ -3,6 +3,8 @@
  * Gestiona el estado, las vistas y coordina parser + quiz engine.
  */
 
+const LEGAL_DOCUMENT_VERSION = '2026-11-06';
+
 const App = {
 
     // ─── Estado global ────────────────────────────────────────
@@ -251,6 +253,10 @@ const App = {
                                     <button class="auth-password__toggle" type="button" id="auth-password-toggle" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
                                 </span>
                             </label>
+                            <label class="auth-legal-consent" id="auth-legal-consent" hidden>
+                                <input type="checkbox" name="legalConsent" required>
+                                <span>He leído y acepto los <a href="terminos.html" target="_blank" rel="noopener noreferrer">Términos y condiciones</a> y reconozco el <a href="privacidad.html" target="_blank" rel="noopener noreferrer">Aviso de privacidad</a>.</span>
+                            </label>
                             <button class="auth-link auth-forgot" type="button" id="auth-forgot">¿Olvidaste tu contraseña?</button>
                             <button class="btn btn--gold auth-submit" type="submit" id="auth-submit">Iniciar sesión</button>
                             <p id="auth-message" class="auth-message" role="status"></p>
@@ -278,6 +284,8 @@ const App = {
         const passwordInput = document.getElementById('auth-password');
         const displayNameInput = form.elements.namedItem('displayName');
         const displayNameField = document.getElementById('auth-display-name-field');
+        const legalConsentField = document.getElementById('auth-legal-consent');
+        const legalConsentInput = form.elements.namedItem('legalConsent');
         const submitButton = document.getElementById('auth-submit');
         const setMessage = (text, isError = false) => {
             const message = document.getElementById('auth-message');
@@ -289,6 +297,8 @@ const App = {
             const signup = mode === 'signup';
             displayNameField.hidden = !signup;
             displayNameInput.required = signup;
+            legalConsentField.hidden = !signup;
+            legalConsentInput.required = signup;
             passwordInput.autocomplete = signup ? 'new-password' : 'current-password';
             submitButton.textContent = signup ? 'Crear mi cuenta' : 'Iniciar sesión';
             document.getElementById('auth-mode-toggle').textContent = signup ? 'Iniciar sesión' : 'Crear una cuenta';
@@ -296,6 +306,7 @@ const App = {
             document.getElementById('auth-forgot').hidden = signup;
             setMessage('');
         };
+        updateMode();
         document.getElementById('auth-mode-toggle').addEventListener('click', () => {
             mode = mode === 'login' ? 'signup' : 'login';
             updateMode();
@@ -335,17 +346,28 @@ const App = {
             const formData = new FormData(form);
             const email = String(formData.get('email') || '').trim();
             const password = String(formData.get('password') || '');
+            if (mode === 'signup' && !formData.get('legalConsent')) {
+                legalConsentInput.focus();
+                return;
+            }
             submitButton.disabled = true;
             setMessage('');
 
             try {
                 if (mode === 'signup') {
+                    const legalAcceptedAt = new Date().toISOString();
                     const { data, error } = await this.supabaseClient.auth.signUp({
                         email,
                         password,
                         options: {
                             emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
-                            data: { display_name: String(formData.get('displayName') || '').trim() }
+                            data: {
+                                display_name: String(formData.get('displayName') || '').trim(),
+                                legal_terms_version: LEGAL_DOCUMENT_VERSION,
+                                legal_terms_accepted_at: legalAcceptedAt,
+                                privacy_notice_version: LEGAL_DOCUMENT_VERSION,
+                                privacy_notice_acknowledged_at: legalAcceptedAt
+                            }
                         }
                     });
                     if (error) throw error;
@@ -487,8 +509,9 @@ const App = {
         this._cargarStatsCache();
         this._attachCardEvents();
 
+        const cards = [...document.querySelectorAll('.ley-card[data-ley-id]')];
         document.getElementById('inp-buscar')?.addEventListener('input', (e) => {
-            this._filtrarLeyes(e.target.value.toLowerCase());
+            this._filtrarLeyes(e.target.value.toLowerCase(), cards);
         });
     },
 
@@ -1140,8 +1163,9 @@ const App = {
     },
 
     _htmlCard(ley) {
+        const searchText = [ley.titulo, ley.subtitulo, ...ley.tags].join(' ').toLowerCase();
         return `
-        <article class="ley-card" data-ley-id="${ley.id}" id="card-${ley.id}">
+        <article class="ley-card" data-ley-id="${ley.id}" data-search="${this._escaparHTML(searchText)}" id="card-${ley.id}">
             <div class="ley-card__header" style="background: ${ley.colorGradient}">
                 <span class="ley-card__icon">${ley.icono}</span>
                 <div class="ley-card__badge">${ley.subtitulo}</div>
@@ -1179,12 +1203,9 @@ const App = {
         });
     },
 
-    _filtrarLeyes(q) {
-        document.querySelectorAll('.ley-card').forEach(card => {
-            const leyId = card.dataset.leyId;
-            const ley = LEYES_DATA.find(l => l.id === leyId);
-            const texto = (ley.titulo + ' ' + ley.subtitulo + ' ' + ley.tags.join(' ')).toLowerCase();
-            card.style.display = texto.includes(q) ? '' : 'none';
+    _filtrarLeyes(q, cards = document.querySelectorAll('.ley-card[data-ley-id]')) {
+        cards.forEach(card => {
+            card.style.display = card.dataset.search.includes(q) ? '' : 'none';
         });
     },
 

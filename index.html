@@ -55,29 +55,47 @@
                     Biblioteca
                 </a>
                 <button type="button" class="sidebar__link sidebar__link-button" id="btn-importar-libro">
-                    <span style="font-size:14px">📥</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v12m-5-5 5 5 5-5" />
+                        <path d="M5 17v4h14v-4" />
+                    </svg>
                     Importar PDF
                 </button>
                 <input type="file" id="input-libro-pdf" accept="application/pdf,.pdf" hidden>
                 <a href="#" class="sidebar__link" onclick="App.navegarA('libros-pdf')" role="button"
                     data-nav="libros-pdf" id="nav-libros-pdf" aria-label="Mis libros PDF" title="Mis libros PDF">
-                    <span style="font-size:14px">📚</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z" />
+                        <path d="M4 5.5v13A2.5 2.5 0 0 1 6.5 16H20M8 7h8m-8 3h8" />
+                    </svg>
                     LIBROS PDF
                 </a>
                 <a href="#" class="sidebar__link" role="button" data-nav="comunidad" id="nav-comunidad" aria-label="Comunidad" title="Comunidad">
-                    <span style="font-size:14px">👥</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="10" cy="7" r="4" />
+                        <path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
                     COMUNIDAD
                 </a>
                 <a href="#" class="sidebar__link" role="button" data-nav="perfil" id="nav-perfil" aria-label="Mi perfil" title="Mi perfil">
-                    <span style="font-size:14px">🪪</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M5 21v-1a7 7 0 0 1 14 0v1" />
+                    </svg>
                     Mi perfil
                 </a>
                 <a href="#" class="sidebar__link" role="button" data-nav="mensajes" id="nav-mensajes" aria-label="Mensajes" title="Mensajes">
-                    <span style="font-size:14px">💬</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" />
+                    </svg>
                     Mensajes
                 </a>
                 <a href="#" class="sidebar__link" role="button" data-nav="anuncios" id="nav-anuncios" aria-label="Anuncios" title="Anuncios">
-                    <span style="font-size:14px">📢</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m3 11 18-5v12L3 13v-2z" />
+                        <path d="M11.6 15.5 13 21l4-2-2-4.5M5 14l1.5 5H11" />
+                    </svg>
                     Anuncios
                 </a>
 
@@ -94,24 +112,37 @@
                 <span class="sidebar__section-label" style="margin-top:12px;">Leyes</span>
 
                 <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'cpe'})" role="button">
-                    <span style="font-size:14px">🏛️</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m3 9 9-6 9 6M4 10h16M5 10v9m4-9v9m6-9v9m4-9v9M3 21h18" />
+                    </svg>
                     Const. Política
                 </a>
                 <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'cpp'})" role="button">
-                    <span style="font-size:14px">⚖️</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v18m-7 0h14M5 6h14M7 6l-4 8h8L7 6zm10 0-4 8h8l-4-8z" />
+                    </svg>
                     Cód. Proc. Penal
                 </a>
                 <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'cp'})" role="button">
-                    <span style="font-size:14px">🔒</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="4" y="11" width="16" height="10" rx="2" />
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4m-4 4v2" />
+                    </svg>
                     Código Penal
                 </a>
                 <a href="#" class="sidebar__link" onclick="App.navegarA('lector',{leyId:'lomp'})" role="button">
-                    <span style="font-size:14px">🏢</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="4" y="3" width="16" height="18" rx="1" />
+                        <path d="M9 21v-4h6v4M8 7h2m4 0h2m-8 4h2m4 0h2" />
+                    </svg>
                     Ley Org. Min. Pub.
                 </a>
                 <a href="https://wa.me/message/J6GSJEWVOQYGP1" class="sidebar__link sidebar__support"
                     target="_blank" rel="noopener noreferrer" aria-label="Soporte por WhatsApp" title="Soporte por WhatsApp">
-                    <span style="font-size:14px" aria-hidden="true">🟢</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 14v-3a9 9 0 0 1 18 0v3" />
+                        <path d="M5 14h2a2 2 0 0 1 2 2v3H7a4 4 0 0 1-4-4v-1zm14 0h-2a2 2 0 0 0-2 2v3h2a4 4 0 0 0 4-4v-1zM15 19a4 4 0 0 1-4 2h-1" />
+                    </svg>
                     Soporte por WhatsApp
                 </a>
             </nav>
@@ -154,6 +185,12 @@
         </main>
 
     </div><!-- /app-layout -->
+
+    <footer class="legal-footer">
+        <span>© 2026 Biblioluch</span>
+        <a href="privacidad.html">Aviso de privacidad</a>
+        <a href="terminos.html">Términos y condiciones</a>
+    </footer>
 
     <dialog class="install-help" id="install-help" aria-labelledby="install-help-title">
         <div class="install-help__content">
