@@ -2264,7 +2264,7 @@ body::before {
 
     body:not(.auth-required) .app-layout {
         display: block;
-        padding-top: 108px;
+        padding-top: 64px;
     }
     .app-topbar {
         height: 64px;
@@ -2290,12 +2290,12 @@ body::before {
         left: 0;
         width: 100%;
         max-width: none;
-        height: 44px;
+        height: 0;
         min-height: 0;
         transform: none;
         border-right: 0;
-        border-bottom: 1px solid var(--border);
-        box-shadow: 0 5px 20px rgba(35,39,78,.06);
+        border-bottom: 0;
+        box-shadow: none;
         z-index: 300;
     }
     .sidebar__nav {
