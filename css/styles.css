@@ -818,6 +818,31 @@ body.auth-required .auth-wrap {
 .announcements-dialog__close:hover { background: var(--bg-card-hov); }
 .announcements-dialog__list { display: grid; gap: 12px; }
 .announcements-dialog__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.pdf-ai-dialog {
+    width: min(92vw, 680px);
+    max-width: 680px;
+    max-height: min(86vh, 760px);
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    color: var(--text-1);
+    box-shadow: var(--shadow-card);
+}
+.pdf-ai-dialog::backdrop { background: rgba(8, 14, 25, .72); backdrop-filter: blur(4px); }
+.pdf-ai-dialog .announcements-dialog__content { max-height: min(86vh, 760px); }
+.pdf-ai-notice, .pdf-ai-status { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.pdf-ai-status--error { color: var(--red); }
+.pdf-ai-messages { display: grid; gap: 10px; max-height: 38vh; overflow-y: auto; }
+.pdf-ai-message { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.pdf-ai-message--assistant { background: var(--bg-card-hov); }
+.pdf-ai-message--user { border-color: rgba(240, 165, 0, .35); }
+.pdf-ai-message strong { color: var(--text-1); font-size: 13px; }
+.pdf-ai-message p { margin: 6px 0 0; color: var(--text-2); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pdf-ai-form { display: grid; gap: 12px; }
+.pdf-ai-form .input-num { width: 100%; resize: vertical; text-align: left; }
+.pdf-ai-form .btn { min-width: 160px; }
 .announcement-delete { justify-self: end; color: var(--red); font-size: 12px; }
 .announcement-delete:hover { text-decoration: underline; }
 .auth-support-button {

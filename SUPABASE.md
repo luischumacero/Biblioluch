@@ -37,6 +37,20 @@ Los mensajes privados y los anuncios pueden llegar como notificaciones push aunq
 
 6. Publica la web con la clave pública VAPID actualizada. Desde **Anuncios**, la cuenta `luischumacero9870@gmail.com` puede enviar un título y mensaje a toda la comunidad; el servidor rechaza publicaciones de otras cuentas. Los avisos push solo llegan a dispositivos que hayan autorizado las notificaciones. Si el navegador o el dispositivo no admite push, los anuncios igualmente aparecen en la sección **Anuncios**.
 
+## Preguntas sobre PDF con Gemini y límite de subidas
+
+1. Vuelve a ejecutar [`supabase/setup.sql`](./supabase/setup.sql). El límite se aplica en Storage: cada cuenta puede subir hasta 3 PDF al día a su biblioteca personal y, por separado, hasta 3 PDF al día a grupos de COMUNIDAD. Borrar un PDF no restablece una subida ya contabilizada.
+2. Crea una clave nueva de Gemini en Google AI Studio. Si una clave real se compartió en una conversación o en otro lugar público, revócala y crea una nueva.
+3. Configura la clave como secreto de Supabase y despliega la función:
+
+   ```text
+   supabase secrets set GEMINI_API_KEY=TU_CLAVE_NUEVA
+   spdfupabase functions deploy ask-
+   ```
+
+   No guardes esa clave en `js/supabase-config.js`, el navegador ni Git.
+4. Publica los cambios de Biblioluch. En los PDF personales y de comunidad aparecerá **Preguntar a IA**. La app extrae el texto del PDF en el navegador y lo envía junto con tus preguntas a la función protegida de Supabase; Gemini responde en español. Las conversaciones no se guardan en Biblioluch. Las subidas en modo local sin Supabase no usan cuentas ni aplican este límite por usuario.
+
 ## Instalar Biblioluch en el celular
 
 - Publica la aplicación en una dirección HTTPS. El botón **Instalar app** aparecerá en la barra superior; en Android y navegadores compatibles abrirá la confirmación del navegador. En iPhone, abre el sitio en Safari, toca **Instalar app** y sigue las instrucciones para añadirlo a la pantalla de inicio.
@@ -51,6 +65,7 @@ El sitio es estático y sus PDFs personales viven en Supabase. El archivo [`.ass
 
 - Con Supabase configurado, el inicio de sesión es requisito para entrar al sitio. Al cerrar sesión se vuelve a la pantalla de acceso; la versión local sin configuración de Supabase conserva el acceso actual.
 - Los libros importados se suben al bucket privado y cada usuario solo ve/renombra/elimina sus propios libros.
+- Las subidas a Storage se limitan a 3 por día y por usuario en cada bucket PDF: biblioteca personal y comunidad tienen contadores separados. La consulta con Gemini solo está disponible con Supabase configurado y su clave guardada como secreto de función.
 - En **COMUNIDAD**, cualquier usuario con sesión puede crear grupos con nombre, descripción y visibilidad pública o privada. Los grupos públicos muestran solo su nombre y descripción a otros usuarios; para unirse a cualquier grupo siempre se necesita el código de ingreso. Los PDFs y sus códigos no son visibles públicamente: solo los miembros pueden abrir y generar preguntas sobre los PDFs; solo quien subió un PDF puede eliminarlo. Los grupos existentes se conservan como privados.
 - En **Mi perfil**, cada usuario puede editar su nombre de usuario, nombre visible, descripción, institución opcional y foto. Los nombres de usuario deben ser únicos. La búsqueda para iniciar chats se realiza por prefijo del nombre de usuario.
 - En **Mensajes**, los usuarios pueden abrir chats privados o crear grupos de estudio. Al abrir una conversación, esta ocupa una vista independiente con opción para volver a la lista. El flujo de crear grupo añade al creador y al menos dos participantes buscados. Los mensajes se transmiten en tiempo real mediante Supabase Realtime; confirma que la tabla `messages` aparezca en la publicación `supabase_realtime` (el SQL intenta añadirla automáticamente).

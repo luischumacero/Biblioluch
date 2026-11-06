@@ -708,3 +708,60 @@ create policy "Uploaders can delete community PDFs"
         and (storage.foldername(name))[3] = (select auth.uid())::text
         and public.is_community_member(((storage.foldername(name))[2])::uuid)
     );
+
+create table if not exists public.pdf_upload_daily_usage (
+    user_id uuid not null references auth.users(id) on delete cascade,
+    upload_type text not null check (upload_type in ('personal', 'community')),
+    upload_date date not null,
+    upload_count integer not null check (upload_count between 1 and 3),
+    primary key (user_id, upload_type, upload_date)
+);
+
+alter table public.pdf_upload_daily_usage enable row level security;
+revoke all on table public.pdf_upload_daily_usage from anon, authenticated;
+
+create or replace function public.enforce_daily_pdf_upload_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    upload_type text;
+    usage_date date := (now() at time zone 'UTC')::date;
+    new_count integer;
+begin
+    if new.bucket_id = 'libros-pdf' then
+        upload_type := 'personal';
+    elsif new.bucket_id = 'comunidad-pdf' then
+        upload_type := 'community';
+    else
+        return new;
+    end if;
+
+    if auth.uid() is null then
+        raise exception 'Inicia sesión para subir un PDF.';
+    end if;
+
+    insert into public.pdf_upload_daily_usage (user_id, upload_type, upload_date, upload_count)
+    values ((select auth.uid()), upload_type, usage_date, 1)
+    on conflict (user_id, upload_type, upload_date)
+    do update set upload_count = public.pdf_upload_daily_usage.upload_count + 1
+        where public.pdf_upload_daily_usage.upload_count < 3
+    returning upload_count into new_count;
+
+    if new_count is null then
+        if upload_type = 'personal' then
+            raise exception 'Límite diario alcanzado: puedes subir hasta 3 PDF al día a tu biblioteca personal.';
+        end if;
+        raise exception 'Límite diario alcanzado: puedes subir hasta 3 PDF al día a los grupos de comunidad.';
+    end if;
+
+    return new;
+end;
+$$;
+
+drop trigger if exists enforce_daily_pdf_upload_limit on storage.objects;
+create trigger enforce_daily_pdf_upload_limit
+    before insert on storage.objects
+    for each row execute function public.enforce_daily_pdf_upload_limit();

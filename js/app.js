@@ -668,7 +668,7 @@ const App = {
                     <button class="btn btn--ghost" id="btn-back-libros">‹ Biblioteca</button>
                     <div>
                         <h1 class="page-title">LIBROS PDF</h1>
-                        <p class="page-subtitle">Tus libros de lectura, guardados para abrirlos y generar preguntas.</p>
+                        <p class="page-subtitle">Tus libros de lectura. Máximo 3 subidas al día en esta sección.</p>
                     </div>
                     <button type="button" class="btn btn--gold" id="btn-importar-libro-page">📥 Importar PDF</button>
                 </div>
@@ -705,6 +705,7 @@ const App = {
                     <div class="ley-card__footer libro-card__footer">
                         <button class="btn btn--outline btn-libro-leer" data-book-file="${encodeURIComponent(libro.filename)}">Abrir</button>
                         <button class="btn btn--gold btn-libro-quiz" data-book-file="${encodeURIComponent(libro.filename)}">Generar preguntas</button>
+                        ${this.supabaseClient ? `<button class="btn btn--outline btn-libro-ai" data-book-file="${encodeURIComponent(libro.filename)}">✨ Preguntar a IA</button>` : ''}
                         <button class="btn btn--ghost btn-libro-renombrar" data-book-file="${encodeURIComponent(libro.filename)}">Guardar nombre</button>
                         <button class="btn btn--ghost btn-libro-eliminar" data-book-file="${encodeURIComponent(libro.filename)}">🗑️ Eliminar</button>
                     </div>
@@ -715,6 +716,9 @@ const App = {
             }));
             lista.querySelectorAll('.btn-libro-quiz').forEach(button => button.addEventListener('click', () => {
                 this.navegarA('quiz-config', { leyId: this._idLibro(decodeURIComponent(button.dataset.bookFile)) });
+            }));
+            lista.querySelectorAll('.btn-libro-ai').forEach(button => button.addEventListener('click', () => {
+                this._abrirConsultaIA('personal', decodeURIComponent(button.dataset.bookFile));
             }));
             lista.querySelectorAll('.btn-libro-renombrar').forEach(button => button.addEventListener('click', () => {
                 const filename = decodeURIComponent(button.dataset.bookFile);
@@ -955,7 +959,7 @@ const App = {
             <div class="page-enter libros-page">
                 <div class="page-header">
                     <button class="btn btn--ghost" id="btn-volver-comunidades">‹ COMUNIDAD</button>
-                    <div><h1 class="page-title">${this._escaparHTML(grupo.name)}</h1><p class="page-subtitle">${this._escaparHTML(grupo.description)} · Grupo ${grupo.is_public ? 'público' : 'privado'}; los PDFs son solo para sus miembros.</p></div>
+                    <div><h1 class="page-title">${this._escaparHTML(grupo.name)}</h1><p class="page-subtitle">${this._escaparHTML(grupo.description)} · Grupo ${grupo.is_public ? 'público' : 'privado'}; máximo 3 subidas al día por usuario.</p></div>
                     <button type="button" class="btn btn--gold" id="btn-subir-pdf-comunidad">📥 Subir PDF</button>
                     <input type="file" id="input-pdf-comunidad" accept="application/pdf,.pdf" hidden>
                 </div>
@@ -968,6 +972,7 @@ const App = {
                             <div class="ley-card__footer libro-card__footer">
                                 <button class="btn btn--outline btn-comunidad-leer" data-book-id="${libro.id}">Abrir</button>
                                 <button class="btn btn--gold btn-comunidad-quiz" data-book-id="${libro.id}">Generar preguntas</button>
+                                <button class="btn btn--outline btn-comunidad-ai" data-book-id="${libro.id}">✨ Preguntar a IA</button>
                                 ${libro.user_id === this.estado.usuario.id ? `<button class="btn btn--ghost btn-comunidad-eliminar" data-book-id="${libro.id}">🗑️ Eliminar</button>` : ''}
                             </div>
                         </article>`).join('') : '<div class="libros-vacio">Este grupo aún no tiene PDFs. Sube uno para compartirlo con sus miembros.</div>'}
@@ -995,10 +1000,123 @@ const App = {
         document.querySelectorAll('.btn-comunidad-quiz').forEach(button => button.addEventListener('click', () => {
             this.navegarA('quiz-config', { leyId: this._idLibroComunidad(button.dataset.bookId) });
         }));
+        document.querySelectorAll('.btn-comunidad-ai').forEach(button => button.addEventListener('click', () => {
+            this._abrirConsultaIA('comunidad', button.dataset.bookId);
+        }));
         document.querySelectorAll('.btn-comunidad-eliminar').forEach(button => button.addEventListener('click', async () => {
             const libro = this.estado.librosComunidad.find(item => item.id === button.dataset.bookId);
             if (libro) await this._eliminarPDFComunidad(libro, grupo);
         }));
+    },
+
+    async _abrirConsultaIA(tipo, identificador) {
+        if (!this.supabaseClient || !this.estado.usuario) {
+            alert('Inicia sesión con una cuenta de Biblioluch para consultar tus PDF con IA.');
+            return;
+        }
+        const libro = tipo === 'comunidad'
+            ? this.estado.librosComunidad.find(item => item.id === identificador)
+            : this.estado.librosPDF.find(item => item.filename === identificador);
+        if (!libro) {
+            alert('No se encontró el PDF que quieres consultar.');
+            return;
+        }
+
+        const dialog = document.createElement('dialog');
+        dialog.className = 'pdf-ai-dialog';
+        dialog.innerHTML = `
+            <div class="announcements-dialog__content">
+                <button class="announcements-dialog__close" type="button" aria-label="Cerrar">×</button>
+                <p class="auth-brand__eyebrow">CONSULTA CON IA</p>
+                <h2>${this._escaparHTML(libro.name)}</h2>
+                <p class="pdf-ai-notice">El texto del PDF y tus preguntas se enviarán a Gemini para responder. La conversación no se guarda en Biblioluch.</p>
+                <div class="pdf-ai-messages" aria-live="polite"></div>
+                <p class="pdf-ai-status" role="status">Preparando el texto del PDF…</p>
+                <form class="pdf-ai-form">
+                    <label class="libro-renombrar" for="pdf-ai-question">Tu pregunta
+                        <textarea class="input-num" id="pdf-ai-question" maxlength="1000" rows="3" required placeholder="Escribe una pregunta sobre este PDF…" disabled></textarea>
+                    </label>
+                    <div class="announcements-dialog__actions">
+                        <button class="btn btn--gold" type="submit" disabled>Enviar pregunta</button>
+                    </div>
+                </form>
+            </div>`;
+        document.body.append(dialog);
+        dialog.addEventListener('close', () => dialog.remove(), { once: true });
+        dialog.querySelector('.announcements-dialog__close').addEventListener('click', () => dialog.close());
+        dialog.showModal();
+
+        const messages = dialog.querySelector('.pdf-ai-messages');
+        const status = dialog.querySelector('.pdf-ai-status');
+        const form = dialog.querySelector('.pdf-ai-form');
+        const questionInput = dialog.querySelector('#pdf-ai-question');
+        const submitButton = form.querySelector('button[type="submit"]');
+        const history = [];
+        const addMessage = (role, text) => {
+            const message = document.createElement('article');
+            message.className = `pdf-ai-message pdf-ai-message--${role}`;
+            const heading = document.createElement('strong');
+            heading.textContent = role === 'assistant' ? 'Gemini' : 'Tú';
+            const content = document.createElement('p');
+            content.textContent = text;
+            message.append(heading, content);
+            messages.append(message);
+            messages.scrollTop = messages.scrollHeight;
+        };
+
+        let context;
+        try {
+            context = await this.parser.extraerTexto(libro.url, 60000);
+            if (!context.trim()) throw new Error('No se encontró texto seleccionable en el PDF.');
+            status.textContent = 'PDF listo. Puedes hacer preguntas sobre su contenido.';
+            questionInput.disabled = false;
+            submitButton.disabled = false;
+            questionInput.focus();
+        } catch (error) {
+            status.textContent = error.message || 'No se pudo preparar el PDF.';
+            status.classList.add('pdf-ai-status--error');
+            return;
+        }
+
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const question = questionInput.value.trim();
+            if (!question) return;
+            addMessage('user', question);
+            questionInput.value = '';
+            questionInput.disabled = true;
+            submitButton.disabled = true;
+            status.textContent = 'Gemini está preparando una respuesta…';
+            status.classList.remove('pdf-ai-status--error');
+            try {
+                const { data, error } = await this.supabaseClient.functions.invoke('ask-pdf', {
+                    body: { context, question, history: history.slice(-8) }
+                });
+                if (error) {
+                    let errorMessage = error.message || 'No se pudo consultar Gemini.';
+                    if (error.context instanceof Response) {
+                        const errorBody = await error.context.clone().json();
+                        if (errorBody && typeof errorBody.error === 'string') errorMessage = errorBody.error;
+                    }
+                    throw new Error(errorMessage);
+                }
+                if (typeof data?.answer !== 'string' || !data.answer.trim()) {
+                    throw new Error('Gemini no devolvió una respuesta. Inténtalo de nuevo.');
+                }
+                addMessage('assistant', data.answer);
+                history.push({ role: 'user', text: question }, { role: 'model', text: data.answer });
+                status.textContent = 'Puedes continuar preguntando sobre este PDF.';
+            } catch (error) {
+                status.textContent = error.message || 'No se pudo consultar la IA.';
+                status.classList.add('pdf-ai-status--error');
+            } finally {
+                if (dialog.open) {
+                    questionInput.disabled = false;
+                    submitButton.disabled = false;
+                    questionInput.focus();
+                }
+            }
+        });
     },
 
     async _subirPDFComunidad(archivo, grupo) {

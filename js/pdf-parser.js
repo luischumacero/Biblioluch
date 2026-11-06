@@ -119,6 +119,19 @@ class PDFParser {
         return estructura;
     }
 
+    async extraerTexto(url, maxCaracteres = 60000) {
+        const pdfjsLib = await this._cargarPdfJs();
+        const tarea = pdfjsLib.getDocument({ url, verbosity: 0 });
+        const pdf = await tarea.promise;
+        let texto = '';
+        for (let paginaNumero = 1; paginaNumero <= pdf.numPages && texto.length < maxCaracteres; paginaNumero++) {
+            const pagina = await pdf.getPage(paginaNumero);
+            const contenido = await pagina.getTextContent();
+            texto += `${this._textosDePagina(contenido)}\n`;
+        }
+        return texto.slice(0, maxCaracteres);
+    }
+
     analizarTextoLectura(texto) {
         const lineas = texto
             .split(/\n|--- SALTO DE PAGINA ---/)
