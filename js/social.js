@@ -88,7 +88,32 @@ const Social = {
                         </label>
                         <div class="social-form-footer"><p id="profile-message" class="auth-message" role="status"></p><button class="btn btn--gold" type="submit">Guardar perfil</button></div>
                     </form>
+                    <section class="config-card profile-mobile-settings" aria-labelledby="profile-app-settings-title">
+                        <div>
+                            <h2 id="profile-app-settings-title">Preferencias de la aplicación</h2>
+                            <p class="profile-hint">Tema y acceso a tu cuenta.</p>
+                        </div>
+                        <div class="profile-mobile-settings__actions">
+                            <button class="btn btn--outline" id="profile-theme-action" type="button"></button>
+                            <button class="btn btn--outline" id="profile-logout-action" type="button">Cerrar sesión</button>
+                        </div>
+                    </section>
                 </div>`;
+
+            const profileThemeButton = document.getElementById('profile-theme-action');
+            const syncProfileThemeButton = () => {
+                profileThemeButton.textContent = document.body.classList.contains('theme-dark')
+                    ? '☀️ Modo claro'
+                    : '🌙 Modo oscuro';
+            };
+            syncProfileThemeButton();
+            profileThemeButton.addEventListener('click', () => {
+                document.getElementById('btn-toggle-theme').click();
+                syncProfileThemeButton();
+            });
+            document.getElementById('profile-logout-action').addEventListener('click', () => {
+                document.getElementById('btn-auth-action').click();
+            });
 
             let avatarFile = null;
             document.getElementById('profile-avatar-file').addEventListener('change', event => {
